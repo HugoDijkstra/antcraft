@@ -15,7 +15,6 @@ import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.ModifyVariable;
 
 /**
  * When the game builds a new exit portal in the strip overworld, it may only use spots well inside
@@ -41,16 +40,6 @@ public abstract class PortalForcerMixin {
 				&& pos.getZ() >= bounds.minZ() + MARGIN && pos.getZ() <= bounds.maxZ() - MARGIN;
 		}
 		return ok;
-	}
-
-	/**
-	 * Vanilla searches 128 blocks for an existing overworld portal because the Nether is 8x smaller.
-	 * Our Nether strip maps 1:1, so with 128 a portal far along the Nether strip would link back to
-	 * some other overworld portal. Use the same 16-block radius both ways.
-	 */
-	@ModifyVariable(method = "findClosestPortalPosition", at = @At("STORE"), ordinal = 0)
-	private int antcraft$sameRadiusBothWays(int radius) {
-		return AntCraft.isStripLevel(this.level) ? Math.min(radius, 16) : radius;
 	}
 
 	/**
