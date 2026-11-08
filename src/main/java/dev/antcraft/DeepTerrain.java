@@ -121,6 +121,11 @@ public final class DeepTerrain {
 	static void set(ChunkAccess chunk, int lx, int y, int lz, BlockState state) {
 		LevelChunkSection section = chunk.getSection(chunk.getSectionIndex(y));
 		section.setBlockState(lx, y & 15, lz, state, false);
+		if (chunk instanceof net.minecraft.world.level.chunk.ProtoChunk && !state.getFluidState().isEmpty()) {
+			// raw section writes schedule no fluid ticks: let the chunk tick this fluid once it is
+			// loaded (like vanilla's aquifers do), so exposed lava and water actually flow
+			chunk.markPosForPostProcessing(new BlockPos(chunk.getPos().getMinBlockX() + lx, y, chunk.getPos().getMinBlockZ() + lz));
+		}
 	}
 
 	static BlockState get(ChunkAccess chunk, int lx, int y, int lz) {
@@ -413,6 +418,27 @@ public final class DeepTerrain {
 	 * Ground plants and the invisible light grid of the forests. Runs during decoration, after the
 	 * trees: lights and petals/carpets are not tree-replaceable and would stop trees from growing.
 	 */
+	private static final int[][] LIGHT_SPOTS = {{0, 0}, {1, 0}, {0, 1}, {-1, 0}, {0, -1}, {1, 1}, {-1, -1}, {1, -1}, {-1, 1}};
+	private static final int[] LIGHT_HEIGHTS = {2, 3, 4, 1};
+
+	/**
+	 * One invisible light-15 block of the forest light grid (every 4 blocks, 2 above the ground):
+	 * enough for light 9+ on every open ground block, so saplings and crops grow. A spot taken by a
+	 * tree or a house moves to the nearest free one instead of leaving a dark patch.
+	 */
+	private void placeGridLight(WorldGenLevel level, BlockPos.MutableBlockPos at, int x, int z, int ground) {
+		for (int dy : LIGHT_HEIGHTS) {
+			for (int[] o : LIGHT_SPOTS) {
+				int px = x + o[0], pz = z + o[1];
+				if (!this.bounds.inside(px, pz)) continue;
+				if (level.getBlockState(at.set(px, ground + dy, pz)).isAir()) {
+					level.setBlock(at, LIGHT_15, Block.UPDATE_CLIENTS);
+					return;
+				}
+			}
+		}
+	}
+
 	public void decorateForests(WorldGenLevel level, ChunkAccess chunk, List<BoundingBox> deepPieces) {
 		ChunkPos pos = chunk.getPos();
 		BlockPos.MutableBlockPos at = new BlockPos.MutableBlockPos();
@@ -440,8 +466,10 @@ public final class DeepTerrain {
 					} else if (plant != null) {
 						level.setBlock(at.set(x, surface + 1, z), plant, Block.UPDATE_CLIENTS);
 					}
-					if (Math.floorMod(x, 5) == 2 && Math.floorMod(z, 5) == 2 && level.getBlockState(at.set(x, surface + 3, z)).isAir()) {
-						level.setBlock(at, LIGHT_15, Block.UPDATE_CLIENTS);
+					if (Math.floorMod(x, 4) == 1 && Math.floorMod(z, 4) == 1) {
+						// villages stand on a flattened floor, not the natural forest surface
+						int ground = UndergroundForest.inVillage(deepPieces, layer, x, z, 3) ? Strip.forestFloor(layer) : surface;
+						this.placeGridLight(level, at, x, z, ground);
 					}
 				}
 			}
@@ -795,7 +823,7 @@ public final class DeepTerrain {
 	 * 7: ancient debris) and keeps appearing below; the earlier an ore unlocks, the more common it is.
 	 */
 	private static final List<Ore> ORES = List.of(
-		ore(Blocks.COAL_ORE, Blocks.DEEPSLATE_COAL_ORE, 1, 8, 14, -1, 12),
+		ore(Blocks.COAL_ORE, Blocks.DEEPSLATE_COAL_ORE, 1, 8, 24, -1, 14),
 		ore(Blocks.COPPER_ORE, Blocks.DEEPSLATE_COPPER_ORE, 1, 8, 10, 0, 10),
 		ore(Blocks.IRON_ORE, Blocks.DEEPSLATE_IRON_ORE, 2, 8, 9, 0, 9),
 		ore(Blocks.GOLD_ORE, Blocks.DEEPSLATE_GOLD_ORE, 3, 8, 6, 0, 8),
