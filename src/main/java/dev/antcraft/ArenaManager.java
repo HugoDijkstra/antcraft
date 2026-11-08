@@ -11,6 +11,14 @@ import java.util.UUID;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.fabricmc.fabric.api.event.player.UseBlockCallback;
+import net.minecraft.tags.BlockTags;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.ButtonBlock;
+import net.minecraft.world.level.block.state.properties.AttachFace;
+import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.chat.Component;
@@ -53,8 +61,8 @@ import org.jspecify.annotations.Nullable;
  *
  * <p>Every 10 ticks, per floor (state saved with the world):
  * <ul>
- *   <li><b>idle</b>: a survival player inside the room closes the doorways with arena gates,
- *       spawns the guardian and shows a boss bar (&rarr; fighting);</li>
+ *   <li><b>idle</b>: pressing the start button on the pedestal next to the hole closes the
+ *       doorways with arena gates, spawns the guardian and shows a boss bar (&rarr; fighting);</li>
  *   <li><b>fighting</b>: the guardian dies &rarr; gates open, the seal becomes a ladder, the
  *       guardian advancement is granted (&rarr; cleared). Nobody alive left inside &rarr; the
  *       guardian vanishes and the gates open (&rarr; idle, full reset for the next try);</li>
@@ -97,6 +105,16 @@ public final class ArenaManager {
 
 	private static BlockPos holePos(long seed, int floor, StripBounds bounds) {
 		return new BlockPos(Strip.holeX(seed, floor, bounds), Strip.floorTop(floor), Strip.holeZ(seed, floor, bounds));
+	}
+
+	/**
+	 * The start button: on a pedestal 3 blocks from the hole along z (towards the strip's middle
+	 * if the hole is near an end), clear of the hole's lanterns.
+	 */
+	static BlockPos buttonPos(long seed, int floor, StripBounds bounds) {
+		int hx = Strip.holeX(seed, floor, bounds), hz = Strip.holeZ(seed, floor, bounds);
+		int z = hz + 3 <= bounds.maxZ() - 1 ? hz + 3 : hz - 3;
+		return new BlockPos(hx, Strip.floorTop(floor) + 2, z);
 	}
 
 	private static List<BlockPos> gatePositions(long seed, int floor, StripBounds bounds) {
@@ -217,6 +235,7 @@ public final class ArenaManager {
 	public static void register() {
 		ServerTickEvents.END_SERVER_TICK.register(ArenaManager::tick);
 		ServerLivingEntityEvents.AFTER_DEATH.register(ArenaManager::onDeath);
+		UseBlockCallback.EVENT.register(ArenaManager::onUseBlock);
 		ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
 			BARS.values().forEach(ServerBossEvent::removeAllPlayers);
 			BARS.clear();
@@ -264,7 +283,38 @@ public final class ArenaManager {
 			data(level).set(floor, CLEARED, null);
 			return;
 		}
-		startFight(level, bounds, seed, floor, hole, room, inside);
+		placeButton(level, seed, floor, bounds);
+	}
+
+	/** Pedestal + button (also added to boss rooms generated before the button existed). */
+	private static void placeButton(ServerLevel level, long seed, int floor, StripBounds bounds) {
+		BlockPos button = buttonPos(seed, floor, bounds);
+		BlockPos pedestal = button.below();
+		if (!level.isLoaded(button) || level.getBlockState(button).is(BlockTags.BUTTONS)) return;
+		if (!level.getBlockState(pedestal).canBeReplaced() && !level.getBlockState(pedestal).is(Blocks.CHISELED_POLISHED_BLACKSTONE)) return;
+		if (!level.getBlockState(button).canBeReplaced()) return;
+		level.setBlockAndUpdate(pedestal, Blocks.CHISELED_POLISHED_BLACKSTONE.defaultBlockState());
+		level.setBlockAndUpdate(button, Blocks.POLISHED_BLACKSTONE_BUTTON.defaultBlockState().setValue(ButtonBlock.FACE, AttachFace.FLOOR));
+	}
+
+	/** A player pressed a button: if it is an idle boss room's start button, the fight begins. */
+	private static InteractionResult onUseBlock(Player player, Level world, InteractionHand hand, BlockHitResult hit) {
+		if (!(world instanceof ServerLevel level) || level != level.getServer().overworld() || player.isSpectator()) return InteractionResult.PASS;
+		BlockPos pos = hit.getBlockPos();
+		if (!level.getBlockState(pos).is(BlockTags.BUTTONS)) return InteractionResult.PASS;
+		StripBounds bounds = Strip.bounds(level);
+		if (bounds == null) return InteractionResult.PASS;
+		long seed = level.getSeed();
+		for (int floor : Strip.GUARDIAN_FLOORS) {
+			if (!pos.equals(buttonPos(seed, floor, bounds)) || data(level).get(floor).state() != IDLE) continue;
+			BlockPos hole = holePos(seed, floor, bounds);
+			if (!level.getBlockState(hole).is(ModContent.GUARDIAN_SEAL) || !AntCraftConfig.get().guardians) break;
+			AABB room = roomBox(seed, floor, bounds);
+			List<ServerPlayer> inside = playersIn(level, room, false);
+			if (!inside.isEmpty()) startFight(level, bounds, seed, floor, hole, room, inside);
+			break;
+		}
+		return InteractionResult.PASS; // the button still clicks
 	}
 
 	private static void startFight(ServerLevel level, StripBounds bounds, long seed, int floor, BlockPos hole, AABB room, List<ServerPlayer> inside) {

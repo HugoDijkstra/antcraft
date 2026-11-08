@@ -101,7 +101,7 @@ public final class LayerTracker {
 				return Component.translatableWithFallback("antcraft.hint.ancient_sealed", "Sealed — an Ancient Key opens it");
 			}
 			if (state.is(ModContent.GUARDIAN_SEAL)) {
-				return Component.translatableWithFallback("antcraft.hint.guarded", "A guardian blocks the way");
+				return Component.translatableWithFallback("antcraft.hint.guarded", "A guardian blocks the way — press the button to fight");
 			}
 		}
 		return null;

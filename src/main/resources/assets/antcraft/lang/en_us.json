@@ -54,7 +54,7 @@
   "antcraft.layer.8": "Mushroom Abyss",
   "antcraft.layer.subtitle": "Layer %s",
   "antcraft.hint.sealed": "Sealed — a Nether Key opens it",
-  "antcraft.hint.guarded": "A guardian blocks the way",
+  "antcraft.hint.guarded": "A guardian blocks the way — press the button to fight",
   "block.antcraft.ancient_seal": "Ancient Seal",
   "block.antcraft.ancient_seal.locked": "Sealed. An Ancient Key from the ancient city opens it.",
   "block.antcraft.ancient_seal.opened": "The ancient seal shatters. The way down is open.",

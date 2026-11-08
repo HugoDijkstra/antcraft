@@ -77,6 +77,11 @@ public final class StripChunkGenerator extends ChunkGenerator implements Wrapped
 	 */
 	private static final ThreadLocal<Integer> DEEP_GROUND = new ThreadLocal<>();
 
+	/** True while a deep structure (village) is being started by {@link #startDeepStructure}; its pieces are shifted to the strip's centre x afterwards. */
+	public static boolean generatingDeep() {
+		return DEEP_GROUND.get() != null;
+	}
+
 	private final NoiseBasedChunkGenerator base;
 	private final StripBounds bounds;
 	/** Per wall column: lowest y that is barrier (everything below is bedrock). */
