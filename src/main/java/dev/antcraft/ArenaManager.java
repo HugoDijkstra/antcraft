@@ -273,16 +273,17 @@ public final class ArenaManager {
 		if (playersIn(level, room.inflate(4, 2, 12), false).isEmpty()) return;
 		// gates left closed (a fight that was reset while the room was unloaded): open them
 		openGates(level, seed, floor, bounds);
-		List<ServerPlayer> inside = playersIn(level, room, true);
-		if (inside.isEmpty()) return;
 		BlockPos hole = holePos(seed, floor, bounds);
 		if (!level.getBlockState(hole).is(ModContent.GUARDIAN_SEAL)) return; // no boss room here (older world, or guardians were off)
 		if (!AntCraftConfig.get().guardians) {
-			// guardians were switched off after this floor was generated: just open the way
-			SealBlock.open(level, hole);
-			data(level).set(floor, CLEARED, null);
+			// guardians were switched off after this floor was generated: open the way for a survival player
+			if (!playersIn(level, room, true).isEmpty()) {
+				SealBlock.open(level, hole);
+				data(level).set(floor, CLEARED, null);
+			}
 			return;
 		}
+		// any player nearby (creative too) gets the button; pressing it starts the fight
 		placeButton(level, seed, floor, bounds);
 	}
 
