@@ -4,8 +4,12 @@
 	"compatibilityLevel": "JAVA_25",
 	"mixins": [
 		"ChunkMapMixin",
+		"DeepCropGrowthMixin",
 		"DeepMiningMixin",
 		"DeepOreMixin",
+		"DeepSaplingGrowthMixin",
+		"DeepSpawnRateMixin",
+		"DeepZombieGearMixin",
 		"DragonRespawnMixin",
 		"EndGatewayMixin",
 		"EndPortalSpawnMixin",
@@ -20,6 +24,7 @@
 		"PortalForcerMixin",
 		"ScatteredFeaturePieceAccessor",
 		"WorldDimensionsMixin",
+		"SpawnStateAccessor",
 		"VillagerTradesMixin",
 		"WorldGenRegionMixin"
 	],

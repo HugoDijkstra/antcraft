@@ -9,6 +9,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.Level;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
@@ -63,6 +64,14 @@ public final class AntCraft implements ModInitializer {
 	}
 
 	/** The strip overworld, Nether or End (any dimension whose generator is a strip). */
+	/** Crop growth multiplier in the deep layers (no sun down there). */
+	public static final float DEEP_CROP_GROWTH = 3.0F;
+
+	/** True for a position in a deep layer (below the vanilla world) of the strip overworld. */
+	public static boolean isDeepFarm(ServerLevel level, BlockPos pos) {
+		return pos.getY() < Strip.VANILLA_MIN_Y && level.dimension() == Level.OVERWORLD && isStripLevel(level);
+	}
+
 	public static boolean isStripLevel(ServerLevel level) {
 		return level.getChunkSource().getGenerator() instanceof StripGenerator;
 	}
