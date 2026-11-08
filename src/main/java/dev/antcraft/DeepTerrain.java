@@ -835,6 +835,9 @@ public final class DeepTerrain {
 		ore(Blocks.ANCIENT_DEBRIS, Blocks.ANCIENT_DEBRIS, 7, 8, 1, 0, 2)
 	);
 
+	/** All deep ores are this much more common than the base table above. */
+	private static final double ORE_MULTIPLIER = 2.5;
+
 	private static boolean isLayerStone(BlockState state) {
 		for (int i = 1; i < BASE_STONE.length; i++) {
 			if (state == BASE_STONE[i] || state == PATCH_STONE[i]) return true;
@@ -854,7 +857,7 @@ public final class DeepTerrain {
 			int bottom = Strip.layerBottom(layer) + Strip.HALL_HEIGHT;
 			int top = Strip.layerTop(layer);
 			for (Ore ore : ORES) {
-				double expected = ore.count(layer) * areaScale;
+				double expected = ore.count(layer) * ORE_MULTIPLIER * areaScale;
 				int veins = (int) expected + (random.nextDouble() < expected - (int) expected ? 1 : 0);
 				for (int v = 0; v < veins; v++) {
 					int x = minX + random.nextInt(maxX - minX + 1);
