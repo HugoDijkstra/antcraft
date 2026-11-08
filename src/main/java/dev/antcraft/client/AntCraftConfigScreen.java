@@ -73,6 +73,10 @@ public final class AntCraftConfigScreen extends Screen {
 		CycleButton<Boolean> ancientGate = toggle(right, y, "ancient_key_gate", c.ancientKeyGate, v -> c.ancientKeyGate = v);
 		ancientGate.setTooltip(Tooltip.create(Component.translatable("antcraft.config.ancient_key_gate.tooltip")));
 		this.addRenderableWidget(ancientGate);
+		y += ROW;
+		CycleButton<Boolean> autoUpdate = toggle(left, y, "auto_update", c.autoUpdate, v -> c.autoUpdate = v);
+		autoUpdate.setTooltip(Tooltip.create(Component.translatable("antcraft.config.auto_update.tooltip")));
+		this.addRenderableWidget(autoUpdate);
 
 		int bottom = this.height - 28;
 		this.addRenderableWidget(Button.builder(CommonComponents.GUI_DONE, b -> {

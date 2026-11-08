@@ -28,6 +28,8 @@ public final class AntCraftConfig {
 	public boolean guardians = true;
 	public boolean netherKeyGate = true;
 	public boolean ancientKeyGate = true;
+	/** Download new AntCraft releases from GitHub on start ({@link AutoUpdater}). */
+	public boolean autoUpdate = true;
 
 	public static final double MAX_HARDNESS_PER_LAYER = 2.0;
 

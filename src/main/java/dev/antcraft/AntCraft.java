@@ -35,6 +35,7 @@ public final class AntCraft implements ModInitializer {
 	@Override
 	public void onInitialize() {
 		AntCraftConfig.load();
+		AutoUpdater.start();
 		Registry.register(BuiltInRegistries.CHUNK_GENERATOR, Identifier.fromNamespaceAndPath(MOD_ID, "strip"), StripChunkGenerator.CODEC);
 		Registry.register(BuiltInRegistries.CHUNK_GENERATOR, Identifier.fromNamespaceAndPath(MOD_ID, "nether_strip"), NetherStripChunkGenerator.CODEC);
 		Registry.register(BuiltInRegistries.CHUNK_GENERATOR, Identifier.fromNamespaceAndPath(MOD_ID, "end_strip"), EndStripChunkGenerator.CODEC);

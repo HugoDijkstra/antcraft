@@ -84,5 +84,7 @@
   "block.antcraft.teleporter": "Teleporter",
   "block.antcraft.teleporter.inactive": "The teleporter wakes up when this room's guardian is defeated",
   "antcraft.teleporter.surface": "the surface",
-  "antcraft.teleporter.arrived": "Teleported up to %s"
+  "antcraft.teleporter.arrived": "Teleported up to %s",
+  "antcraft.config.auto_update": "Auto-update",
+  "antcraft.config.auto_update.tooltip": "Download new AntCraft versions from GitHub when the game starts. They are used from the next start."
 }

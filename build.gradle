@@ -3,6 +3,13 @@ plugins {
 	id 'maven-publish'
 }
 
+// Version: <base>.<commit count>, the same locally and on GitHub Actions (needs the full history).
+def commitCount = providers.exec {
+	commandLine 'git', 'rev-list', '--count', 'HEAD'
+	ignoreExitValue = true
+}.standardOutput.asText.map { it.trim() }.getOrElse('')
+version = "${project.mod_version_base}.${commitCount.isEmpty() ? '0' : commitCount}"
+
 repositories {
 	// Add repositories to retrieve artifacts from in here.
 	// You should only use this when depending on other mods because
