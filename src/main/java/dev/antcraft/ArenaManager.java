@@ -18,6 +18,7 @@ import net.minecraft.world.InteractionResult;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.ButtonBlock;
 import net.minecraft.world.level.block.state.properties.AttachFace;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.UUIDUtil;
@@ -294,12 +295,119 @@ public final class ArenaManager {
 		// any player nearby (creative too) gets the button; pressing it starts the fight
 		placeButton(level, seed, floor, bounds);
 		placeTeleporter(level, seed, floor, bounds, false);
+		decorate(level, seed, floor, bounds);
 	}
 
 	/** Cleared rooms (also ones cleared before teleporters existed) get a lit teleporter when a player comes near. */
 	private static void tickCleared(ServerLevel level, StripBounds bounds, long seed, int floor) {
 		if (playersIn(level, roomBox(seed, floor, bounds).inflate(4, 2, 12), false).isEmpty()) return;
 		placeTeleporter(level, seed, floor, bounds, true);
+		decorate(level, seed, floor, bounds);
+	}
+
+	// ------------------------------------------------------------------ decoration
+
+	private record Theme(BlockState pillar, BlockState accentPillar, BlockState carpet, BlockState banner, BlockState lantern, BlockState accent) {}
+
+	private static Theme theme(int floor) {
+		return switch (floor) {
+			case 0 -> new Theme(Blocks.DARK_OAK_LOG.defaultBlockState(), Blocks.STRIPPED_DARK_OAK_LOG.defaultBlockState(), Blocks.CARPET.pick(net.minecraft.world.item.DyeColor.RED).defaultBlockState(),
+				Blocks.WALL_BANNER.pick(net.minecraft.world.item.DyeColor.GRAY).defaultBlockState(), Blocks.LANTERN.defaultBlockState(), Blocks.BARREL.defaultBlockState());
+			case 2 -> new Theme(Blocks.BONE_BLOCK.defaultBlockState(), Blocks.BONE_BLOCK.defaultBlockState(), Blocks.CARPET.pick(net.minecraft.world.item.DyeColor.BROWN).defaultBlockState(),
+				Blocks.WALL_BANNER.pick(net.minecraft.world.item.DyeColor.BROWN).defaultBlockState(), Blocks.SOUL_LANTERN.defaultBlockState(), Blocks.SKELETON_SKULL.defaultBlockState());
+			default -> new Theme(Blocks.CUT_SANDSTONE.defaultBlockState(), Blocks.CHISELED_SANDSTONE.defaultBlockState(), Blocks.CARPET.pick(net.minecraft.world.item.DyeColor.ORANGE).defaultBlockState(),
+				Blocks.WALL_BANNER.pick(net.minecraft.world.item.DyeColor.ORANGE).defaultBlockState(), Blocks.LANTERN.defaultBlockState(), Blocks.DECORATED_POT.defaultBlockState());
+		};
+	}
+
+	/** The chiseled block in a boss-room wall that marks the room as decorated (so it happens once). */
+	private static BlockPos decorationMarker(long seed, int floor, StripBounds bounds) {
+		int z = wallZ(seed, floor, bounds, -1);
+		if (z < bounds.minZ()) z = wallZ(seed, floor, bounds, 1);
+		return new BlockPos(bounds.minX(), Strip.floorTop(floor) + Strip.HALL_HEIGHT, z);
+	}
+
+	/**
+	 * Themed decoration of a boss room (pillars, a carpet between the doors, hanging lanterns,
+	 * banners on the walls, cobwebs, a few floor accents). Placed once, only into air, and never
+	 * around the hole (seal, lanterns, button, teleporter); also added to rooms generated before.
+	 */
+	private static void decorate(ServerLevel level, long seed, int floor, StripBounds bounds) {
+		BlockPos marker = decorationMarker(seed, floor, bounds);
+		if (!level.isLoaded(marker) || !level.getBlockState(marker).is(Blocks.POLISHED_BLACKSTONE_BRICKS)) return; // done, or no room
+		int floorTop = Strip.floorTop(floor), ceilingY = floorTop + Strip.HALL_HEIGHT; // last air row
+		int hx = Strip.holeX(seed, floor, bounds), hz = Strip.holeZ(seed, floor, bounds);
+		int zLo = Math.max(bounds.minZ(), hz - WALL_OFFSET + 1), zHi = Math.min(bounds.maxZ(), hz + WALL_OFFSET - 1);
+		// every block of the room must be loaded, or the decoration would be cut off
+		for (int z = zLo; z <= zHi; z += 8) if (!level.isLoaded(new BlockPos(bounds.minX(), floorTop, z)) || !level.isLoaded(new BlockPos(bounds.maxX(), floorTop, z))) return;
+		if (!level.isLoaded(new BlockPos(bounds.minX(), floorTop, zHi)) || !level.isLoaded(new BlockPos(bounds.maxX(), floorTop, zHi))) return;
+		Theme theme = theme(floor);
+		int center = bounds.centerX();
+
+		// pillars along both side walls
+		for (int x : new int[] {bounds.minX() + 1, bounds.maxX() - 1}) {
+			for (int dz : new int[] {-8, -4, 4, 8}) {
+				int z = hz + dz;
+				if (z < zLo || z > zHi || nearHole(x, z, hx, hz)) continue;
+				boolean clear = true;
+				for (int y = floorTop + 1; y <= ceilingY; y++) clear &= level.getBlockState(new BlockPos(x, y, z)).isAir();
+				if (!clear) continue;
+				for (int y = floorTop + 1; y <= ceilingY; y++) {
+					boolean band = y == floorTop + 1 || y == ceilingY;
+					level.setBlockAndUpdate(new BlockPos(x, y, z), band ? theme.accentPillar() : theme.pillar());
+				}
+				// an accent at the pillar's foot, on the side facing the room
+				int ax = x == bounds.minX() + 1 ? x + 1 : x - 1;
+				BlockState accent = theme.accent();
+				if (accent.hasProperty(BlockStateProperties.ROTATION_16)) accent = accent.setValue(BlockStateProperties.ROTATION_16, level.getRandom().nextInt(16));
+				placeIfAir(level, new BlockPos(ax, floorTop + 1, z), accent);
+				if (floor == 6) placeIfAir(level, new BlockPos(ax, floorTop + 2, z), Blocks.CANDLE.defaultBlockState().setValue(BlockStateProperties.CANDLES, 3).setValue(BlockStateProperties.LIT, true));
+			}
+		}
+		// carpet runner between the two doorways
+		for (int z = zLo; z <= zHi; z++) {
+			if (nearHole(center, z, hx, hz)) continue;
+			placeIfAir(level, new BlockPos(center, floorTop + 1, z), theme.carpet());
+		}
+		// lanterns on chains from the ceiling
+		for (int x : new int[] {bounds.minX() + 4, bounds.maxX() - 4}) {
+			for (int dz : new int[] {-7, 0, 7}) {
+				int z = hz + dz;
+				if (z < zLo || z > zHi || nearHole(x, z, hx, hz)) continue;
+				BlockPos chain = new BlockPos(x, ceilingY, z), lamp = chain.below();
+				if (level.getBlockState(chain).isAir() && level.getBlockState(lamp).isAir()) {
+					level.setBlockAndUpdate(chain, Blocks.IRON_CHAIN.defaultBlockState());
+					level.setBlockAndUpdate(lamp, theme.lantern().setValue(BlockStateProperties.HANGING, true));
+				}
+			}
+		}
+		// banners on the inside of the boss-room walls, flanking the doorway
+		for (int side = -1; side <= 1; side += 2) {
+			int wall = hz + side * WALL_OFFSET;
+			if (wall < bounds.minZ() || wall > bounds.maxZ()) continue;
+			int z = wall - side;
+			net.minecraft.core.Direction facing = side < 0 ? net.minecraft.core.Direction.SOUTH : net.minecraft.core.Direction.NORTH;
+			for (int x : new int[] {center - 3, center + 3, bounds.minX() + 2, bounds.maxX() - 2}) {
+				placeIfAir(level, new BlockPos(x, floorTop + 4, z), theme.banner().setValue(BlockStateProperties.HORIZONTAL_FACING, facing));
+			}
+		}
+		// cobwebs in the upper corners
+		for (int x : new int[] {bounds.minX(), bounds.maxX()}) {
+			for (int z : new int[] {zLo, zHi}) {
+				placeIfAir(level, new BlockPos(x, ceilingY, z), Blocks.COBWEB.defaultBlockState());
+				placeIfAir(level, new BlockPos(x, ceilingY - 1, z), Blocks.COBWEB.defaultBlockState());
+				placeIfAir(level, new BlockPos(x + (x == bounds.minX() ? 1 : -1), ceilingY, z), Blocks.COBWEB.defaultBlockState());
+			}
+		}
+		level.setBlockAndUpdate(marker, Blocks.CHISELED_POLISHED_BLACKSTONE.defaultBlockState());
+	}
+
+	private static boolean nearHole(int x, int z, int hx, int hz) {
+		return Math.abs(x - hx) <= 3 && Math.abs(z - hz) <= 3;
+	}
+
+	private static void placeIfAir(ServerLevel level, BlockPos pos, BlockState state) {
+		if (level.getBlockState(pos).isAir()) level.setBlockAndUpdate(pos, state);
 	}
 
 	private static void placeTeleporter(ServerLevel level, long seed, int floor, StripBounds bounds, boolean lit) {
