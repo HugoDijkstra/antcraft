@@ -10,6 +10,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import dev.antcraft.mixin.ScatteredFeaturePieceAccessor;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
 import net.minecraft.core.RegistryAccess;
@@ -158,6 +160,12 @@ public final class StripChunkGenerator extends ChunkGenerator implements Wrapped
 			this.shapeChunk(c, this.terrain(randomState.seed()), cityPieces, randomState);
 			return c;
 		});
+	}
+
+	/** Chunk upgrade step 1 ({@link WorldUpgrade}): see {@link DeepTerrain#retrofit}. */
+	public void retrofitForests(ServerLevel level, LevelChunk chunk) {
+		if (!this.bounds.chunkOverlaps(chunk.getPos())) return;
+		this.terrain(level.getSeed()).retrofit(level, chunk, findDeepPieces(level.structureManager(), chunk.getPos()));
 	}
 
 	/** Boxes of deep structure pieces (ancient city, deep villages) that come near this chunk. */

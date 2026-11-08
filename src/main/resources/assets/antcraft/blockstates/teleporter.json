@@ -1,0 +1,6 @@
+{
+  "variants": {
+    "lit=false": { "model": "antcraft:block/teleporter" },
+    "lit=true": { "model": "antcraft:block/teleporter_lit" }
+  }
+}

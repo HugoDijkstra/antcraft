@@ -39,6 +39,7 @@ public final class AntCraft implements ModInitializer {
 		Registry.register(BuiltInRegistries.CHUNK_GENERATOR, Identifier.fromNamespaceAndPath(MOD_ID, "end_strip"), EndStripChunkGenerator.CODEC);
 		Registry.register(BuiltInRegistries.BIOME_SOURCE, Identifier.fromNamespaceAndPath(MOD_ID, "strip"), StripBiomeSource.CODEC);
 		ModContent.register();
+		WorldUpgrade.register();
 		MiningHardness.register();
 		LayerTracker.register();
 		ArenaManager.register();

@@ -117,6 +117,12 @@ public final class ArenaManager {
 		return new BlockPos(hx, Strip.floorTop(floor) + 2, z);
 	}
 
+	/** The teleporter pad: 3 blocks from the hole across the strip (towards its middle), on the floor. */
+	static BlockPos teleporterPos(long seed, int floor, StripBounds bounds) {
+		int hx = Strip.holeX(seed, floor, bounds), hz = Strip.holeZ(seed, floor, bounds);
+		return new BlockPos(hx < bounds.centerX() ? hx + 3 : hx - 3, Strip.floorTop(floor) + 1, hz);
+	}
+
 	private static List<BlockPos> gatePositions(long seed, int floor, StripBounds bounds) {
 		List<BlockPos> list = new ArrayList<>();
 		int floorTop = Strip.floorTop(floor);
@@ -255,6 +261,8 @@ public final class ArenaManager {
 				else updateBar(overworld, arena);
 			} else if (arena.state() == IDLE && full) {
 				tickIdle(overworld, bounds, seed, floor);
+			} else if (arena.state() == CLEARED && full) {
+				tickCleared(overworld, bounds, seed, floor);
 			}
 		}
 	}
@@ -285,6 +293,59 @@ public final class ArenaManager {
 		}
 		// any player nearby (creative too) gets the button; pressing it starts the fight
 		placeButton(level, seed, floor, bounds);
+		placeTeleporter(level, seed, floor, bounds, false);
+	}
+
+	/** Cleared rooms (also ones cleared before teleporters existed) get a lit teleporter when a player comes near. */
+	private static void tickCleared(ServerLevel level, StripBounds bounds, long seed, int floor) {
+		if (playersIn(level, roomBox(seed, floor, bounds).inflate(4, 2, 12), false).isEmpty()) return;
+		placeTeleporter(level, seed, floor, bounds, true);
+	}
+
+	private static void placeTeleporter(ServerLevel level, long seed, int floor, StripBounds bounds, boolean lit) {
+		BlockPos pos = teleporterPos(seed, floor, bounds);
+		if (!level.isLoaded(pos)) return;
+		BlockState state = level.getBlockState(pos);
+		if (state.is(ModContent.TELEPORTER)) {
+			if (state.getValue(TeleporterBlock.LIT) != lit) level.setBlockAndUpdate(pos, state.setValue(TeleporterBlock.LIT, lit));
+			return;
+		}
+		if (!state.canBeReplaced() || !level.getBlockState(pos.above()).canBeReplaced()) return;
+		level.setBlockAndUpdate(pos, ModContent.TELEPORTER.defaultBlockState().setValue(TeleporterBlock.LIT, lit));
+		if (lit) level.playSound(null, pos, SoundEvents.BEACON_ACTIVATE, SoundSource.BLOCKS, 1.0F, 1.2F);
+	}
+
+	/**
+	 * Teleports a player standing at a lit teleporter to the boss room on the floor above (onto its
+	 * teleporter), or from the first boss room to the surface spawn.
+	 */
+	static void teleportUp(ServerLevel level, ServerPlayer player, BlockPos from) {
+		StripBounds bounds = Strip.bounds(level);
+		if (bounds == null || level != level.getServer().overworld()) return;
+		long seed = level.getSeed();
+		int[] floors = Strip.GUARDIAN_FLOORS;
+		for (int i = 0; i < floors.length; i++) {
+			if (!from.equals(teleporterPos(seed, floors[i], bounds))) continue;
+			BlockPos target;
+			Component where;
+			if (i == 0) {
+				BlockPos spawn = level.getRespawnData().pos();
+				int y = level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, spawn.getX(), spawn.getZ());
+				target = new BlockPos(spawn.getX(), Math.max(y, spawn.getY()), spawn.getZ());
+				where = Component.translatableWithFallback("antcraft.teleporter.surface", "the surface");
+			} else {
+				int above = floors[i - 1];
+				BlockPos pad = teleporterPos(seed, above, bounds);
+				placeTeleporter(level, seed, above, bounds, data(level).get(above).state() == CLEARED);
+				target = pad.above();
+				where = guardianName(above);
+			}
+			level.playSound(null, from, SoundEvents.ENDERMAN_TELEPORT, SoundSource.PLAYERS, 1.0F, 1.0F);
+			player.teleportTo(level, target.getX() + 0.5, target.getY(), target.getZ() + 0.5, java.util.Set.of(), player.getYRot(), player.getXRot(), true);
+			level.playSound(null, target, SoundEvents.ENDERMAN_TELEPORT, SoundSource.PLAYERS, 1.0F, 1.0F);
+			player.sendOverlayMessage(Component.translatableWithFallback("antcraft.teleporter.arrived", "Teleported up to %s", where));
+			return;
+		}
 	}
 
 	/** Pedestal + button (also added to boss rooms generated before the button existed). */
@@ -405,6 +466,7 @@ public final class ArenaManager {
 		if (level.getBlockState(hole).is(ModContent.GUARDIAN_SEAL)) SealBlock.open(level, hole);
 		removeBar(floor);
 		data(level).set(floor, CLEARED, null);
+		placeTeleporter(level, seed, floor, bounds, true);
 		level.playSound(null, hole, SoundEvents.UI_TOAST_CHALLENGE_COMPLETE, SoundSource.PLAYERS, 1.0F, 1.0F);
 		for (ServerPlayer player : playersIn(level, roomBox(seed, floor, bounds), false)) {
 			LayerTracker.award(player, "guardian_" + floor, "defeated");

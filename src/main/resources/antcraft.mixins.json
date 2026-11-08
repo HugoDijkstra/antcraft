@@ -20,6 +20,7 @@
 		"PortalForcerMixin",
 		"ScatteredFeaturePieceAccessor",
 		"WorldDimensionsMixin",
+		"VillagerTradesMixin",
 		"WorldGenRegionMixin"
 	],
 	"injectors": {

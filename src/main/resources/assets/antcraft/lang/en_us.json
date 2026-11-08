@@ -80,5 +80,9 @@
   "advancements.antcraft.ancient_key.title": "Key of the Deep",
   "advancements.antcraft.ancient_key.description": "Find an Ancient Key in the ancient city",
   "advancements.antcraft.opened_ancient_seal.title": "Ancient Lock",
-  "advancements.antcraft.opened_ancient_seal.description": "Open the Ancient Seal on floor 7 with an Ancient Key"
+  "advancements.antcraft.opened_ancient_seal.description": "Open the Ancient Seal on floor 7 with an Ancient Key",
+  "block.antcraft.teleporter": "Teleporter",
+  "block.antcraft.teleporter.inactive": "The teleporter wakes up when this room's guardian is defeated",
+  "antcraft.teleporter.surface": "the surface",
+  "antcraft.teleporter.arrived": "Teleported up to %s"
 }

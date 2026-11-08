@@ -48,10 +48,17 @@ public final class ModContent {
 		unbreakable(ARENA_GATE_KEY).mapColor(MapColor.COLOR_BLACK).sound(SoundType.NETHERITE_BLOCK).lightLevel(state -> 4)
 	);
 
+	/** Boss-room teleporter: lit once the room's guardian is defeated, takes you to the room above. */
+	public static final ResourceKey<Block> TELEPORTER_KEY = blockKey("teleporter");
+	public static final Block TELEPORTER = new TeleporterBlock(
+		unbreakable(TELEPORTER_KEY).mapColor(MapColor.COLOR_PURPLE).sound(SoundType.AMETHYST).lightLevel(state -> state.getValue(TeleporterBlock.LIT) ? 13 : 3)
+	);
+
 	public static final Item NETHER_SEAL_ITEM = blockItem(NETHER_SEAL_KEY, NETHER_SEAL);
 	public static final Item ANCIENT_SEAL_ITEM = blockItem(ANCIENT_SEAL_KEY, ANCIENT_SEAL);
 	public static final Item GUARDIAN_SEAL_ITEM = blockItem(GUARDIAN_SEAL_KEY, GUARDIAN_SEAL);
 	public static final Item ARENA_GATE_ITEM = blockItem(ARENA_GATE_KEY, ARENA_GATE);
+	public static final Item TELEPORTER_ITEM = blockItem(TELEPORTER_KEY, TELEPORTER);
 
 	public static final ResourceKey<Item> NETHER_KEY_KEY = ResourceKey.create(Registries.ITEM, id("nether_key"));
 	public static final Item NETHER_KEY = new Item(new Item.Properties().setId(NETHER_KEY_KEY).stacksTo(1).rarity(Rarity.EPIC).fireResistant());
@@ -82,10 +89,12 @@ public final class ModContent {
 		Registry.register(BuiltInRegistries.BLOCK, ANCIENT_SEAL_KEY, ANCIENT_SEAL);
 		Registry.register(BuiltInRegistries.BLOCK, GUARDIAN_SEAL_KEY, GUARDIAN_SEAL);
 		Registry.register(BuiltInRegistries.BLOCK, ARENA_GATE_KEY, ARENA_GATE);
+		Registry.register(BuiltInRegistries.BLOCK, TELEPORTER_KEY, TELEPORTER);
 		registerBlockItem(NETHER_SEAL_KEY, NETHER_SEAL_ITEM);
 		registerBlockItem(ANCIENT_SEAL_KEY, ANCIENT_SEAL_ITEM);
 		registerBlockItem(GUARDIAN_SEAL_KEY, GUARDIAN_SEAL_ITEM);
 		registerBlockItem(ARENA_GATE_KEY, ARENA_GATE_ITEM);
+		registerBlockItem(TELEPORTER_KEY, TELEPORTER_ITEM);
 		Registry.register(BuiltInRegistries.ITEM, NETHER_KEY_KEY, NETHER_KEY);
 		Registry.register(BuiltInRegistries.ITEM, ANCIENT_KEY_KEY, ANCIENT_KEY);
 	}

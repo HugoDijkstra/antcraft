@@ -4,6 +4,7 @@
     "antcraft:nether_seal",
     "antcraft:ancient_seal",
     "antcraft:guardian_seal",
-    "antcraft:arena_gate"
+    "antcraft:arena_gate",
+    "antcraft:teleporter"
   ]
 }
