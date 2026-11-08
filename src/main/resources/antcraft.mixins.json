@@ -1,0 +1,18 @@
+{
+	"required": true,
+	"package": "dev.antcraft.mixin",
+	"compatibilityLevel": "JAVA_25",
+	"mixins": [
+		"ChunkMapMixin",
+		"DeepMiningMixin",
+		"EnderEyeMixin",
+		"GravityProcessorMixin",
+		"PortalDestinationMixin",
+		"PortalForcerMixin",
+		"WorldDimensionsMixin",
+		"WorldGenRegionMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}

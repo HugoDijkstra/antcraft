@@ -1,0 +1,21 @@
+{
+	"schemaVersion": 1,
+	"id": "antcraft",
+	"version": "${version}",
+	"name": "AntCraft",
+	"description": "The world is a 20x300 strip that goes down almost 2000 blocks: bedrock floors with one hole each, underground forests, and the End portal at the very bottom.",
+	"authors": ["hugo"],
+	"license": "MIT",
+	"icon": "assets/antcraft/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": ["dev.antcraft.AntCraft"]
+	},
+	"mixins": ["antcraft.mixins.json"],
+	"depends": {
+		"fabricloader": ">=0.20.1",
+		"minecraft": "~26.3",
+		"java": ">=25",
+		"fabric-api": "*"
+	}
+}

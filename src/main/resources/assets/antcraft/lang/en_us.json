@@ -1,0 +1,6 @@
+{
+  "block.antcraft.nether_seal": "Nether Seal",
+  "block.antcraft.nether_seal.locked": "Sealed. A Nether Key from the Nether strip opens it.",
+  "block.antcraft.nether_seal.opened": "The seal crumbles. The way down is open.",
+  "item.antcraft.nether_key": "Nether Key"
+}
