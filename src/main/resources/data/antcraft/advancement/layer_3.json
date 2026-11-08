@@ -1,0 +1,43 @@
+{
+  "parent": "antcraft:layer_2",
+  "display": {
+    "icon": {
+      "id": "minecraft:dark_oak_sapling"
+    },
+    "title": {
+      "translate": "advancements.antcraft.layer_3.title",
+      "fallback": "Darkwood Caverns"
+    },
+    "description": {
+      "translate": "advancements.antcraft.layer_3.description",
+      "fallback": "Reach layer 3"
+    }
+  },
+  "criteria": {
+    "reached": {
+      "trigger": "minecraft:location",
+      "conditions": {
+        "player": {
+          "type": "minecraft:entity_properties",
+          "entity": "this",
+          "predicate": {
+            "minecraft:location": {
+              "position": {
+                "y": {
+                  "min": -829.0,
+                  "max": -576.001
+                }
+              },
+              "dimension": "minecraft:overworld"
+            }
+          }
+        }
+      }
+    }
+  },
+  "requirements": [
+    [
+      "reached"
+    ]
+  ]
+}

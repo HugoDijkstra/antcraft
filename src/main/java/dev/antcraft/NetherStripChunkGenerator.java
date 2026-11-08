@@ -1,5 +1,6 @@
 package dev.antcraft;
 
+import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import java.util.List;
@@ -30,7 +31,9 @@ import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
 import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.levelgen.blending.Blender;
 import net.minecraft.world.level.levelgen.densityfunction.SamplerContext;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.levelgen.structure.Structure;
+import net.minecraft.world.level.levelgen.structure.StructurePiece;
 import net.minecraft.world.level.levelgen.structure.StructureStart;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager;
 import org.jspecify.annotations.Nullable;
@@ -41,10 +44,18 @@ import org.jspecify.annotations.Nullable;
  * shrine.
  */
 public final class NetherStripChunkGenerator extends ChunkGenerator implements WrappedNoiseGenerator, StripGenerator {
+	/**
+	 * Where the fortress, the key shrine and the bastion go. Saved with the world: worlds from
+	 * before the bastion have no {@code layout} field and keep layout 1 (fortress 2/3 along the
+	 * strip, shrine at 1/6, no bastion); the antcraft:strip preset asks for the latest layout.
+	 */
+	public static final int LATEST_LAYOUT = 2;
+
 	public static final MapCodec<NetherStripChunkGenerator> CODEC = RecordCodecBuilder.mapCodec(
 		i -> i.group(
 				NoiseBasedChunkGenerator.CODEC.codec().fieldOf("base").forGetter(g -> g.base),
-				StripBounds.SIZE_CODEC.forGetter(g -> g.bounds)
+				StripBounds.SIZE_CODEC.forGetter(g -> g.bounds),
+				Codec.intRange(1, LATEST_LAYOUT).optionalFieldOf("layout", 1).forGetter(g -> g.layout)
 			)
 			.apply(i, NetherStripChunkGenerator::new)
 	);
@@ -52,13 +63,22 @@ public final class NetherStripChunkGenerator extends ChunkGenerator implements W
 	public static final ResourceKey<Structure> STRIP_FORTRESS = ResourceKey.create(
 		Registries.STRUCTURE, Identifier.fromNamespaceAndPath(AntCraft.MOD_ID, "strip_fortress")
 	);
+	public static final ResourceKey<Structure> STRIP_BASTION = ResourceKey.create(
+		Registries.STRUCTURE, Identifier.fromNamespaceAndPath(AntCraft.MOD_ID, "strip_bastion")
+	);
 	private final NoiseBasedChunkGenerator base;
 	private final StripBounds bounds;
+	private final int layout;
 
-	public NetherStripChunkGenerator(NoiseBasedChunkGenerator base, StripBounds bounds) {
+	public NetherStripChunkGenerator(NoiseBasedChunkGenerator base, StripBounds bounds, int layout) {
 		super(base.getBiomeSource());
 		this.base = base;
 		this.bounds = bounds;
+		this.layout = layout;
+	}
+
+	public int layout() {
+		return this.layout;
 	}
 
 	@Override
@@ -71,9 +91,17 @@ public final class NetherStripChunkGenerator extends ChunkGenerator implements W
 		return this.bounds;
 	}
 
-	/** The guaranteed fortress starts here: in the middle of the strip's width, 2/3 along it (chunk 0, 12 for 20x300). */
-	public static ChunkPos fortressChunk(StripBounds bounds) {
-		return new ChunkPos(bounds.centerX() >> 4, bounds.scaledZ(200) >> 4);
+	/**
+	 * The guaranteed fortress starts here, in the middle of the strip's width: 5/6 along it (chunk
+	 * 0, 15 for 20x300), or 2/3 along it (chunk 0, 12) in layout 1.
+	 */
+	public static ChunkPos fortressChunk(StripBounds bounds, int layout) {
+		return new ChunkPos(bounds.centerX() >> 4, bounds.scaledZ(layout >= 2 ? 250 : 200) >> 4);
+	}
+
+	/** The treasure bastion starts here (layout 2+): chunk 0, 2 for 20x300. Null if there is none. */
+	public static @Nullable ChunkPos bastionChunk(StripBounds bounds, int layout) {
+		return layout >= 2 ? new ChunkPos(bounds.centerX() >> 4, bounds.scaledZ(40) >> 4) : null;
 	}
 
 	@Override
@@ -103,12 +131,13 @@ public final class NetherStripChunkGenerator extends ChunkGenerator implements W
 			? this.base.buildTerrain(chunk, blender, randomState, structureManager, biomeManager, carverBiomeRegion, possibleBiomes)
 			: CompletableFuture.completedFuture(chunk);
 		return vanilla.thenApply(c -> {
-			this.shapeChunk(c);
+			shapeChunk(c, this.bounds);
 			return c;
 		});
 	}
 
-	private void shapeChunk(ChunkAccess chunk) {
+	/** Before decoration: void outside the strip, barrier columns on the wall ring (shared with the End strip). */
+	static void shapeChunk(ChunkAccess chunk, StripBounds bounds) {
 		ChunkPos pos = chunk.getPos();
 		LevelChunkSection[] sections = chunk.getSections();
 		for (LevelChunkSection section : sections) section.acquire();
@@ -117,8 +146,8 @@ public final class NetherStripChunkGenerator extends ChunkGenerator implements W
 			for (int lx = 0; lx < 16; lx++) {
 				for (int lz = 0; lz < 16; lz++) {
 					int x = pos.getMinBlockX() + lx, z = pos.getMinBlockZ() + lz;
-					if (this.bounds.inside(x, z)) continue;
-					boolean wall = this.bounds.isWall(x, z);
+					if (bounds.inside(x, z)) continue;
+					boolean wall = bounds.isWall(x, z);
 					for (int i = 0; i < sections.length; i++) {
 						LevelChunkSection section = sections[i];
 						if (!wall && section.hasOnlyAir()) continue;
@@ -138,8 +167,8 @@ public final class NetherStripChunkGenerator extends ChunkGenerator implements W
 				for (int lx = 0; lx < 16; lx++) {
 					for (int lz = 0; lz < 16; lz++) {
 						int x = pos.getMinBlockX() + lx, z = pos.getMinBlockZ() + lz;
-						if (this.bounds.inside(x, z)) continue;
-						if (this.bounds.isWall(x, z)) {
+						if (bounds.inside(x, z)) continue;
+						if (bounds.isWall(x, z)) {
 							heightmap.update(lx, maxY, lz, DeepTerrain.BARRIER);
 						} else {
 							int first = heightmap.getFirstAvailable(lx, lz);
@@ -154,7 +183,7 @@ public final class NetherStripChunkGenerator extends ChunkGenerator implements W
 	}
 
 	/** After decoration: clear spill-over outside the strip and restore wall blocks in the 3x3 region. */
-	private void clipRegion(WorldGenLevel level, ChunkPos center) {
+	static void clipRegion(WorldGenLevel level, ChunkPos center, StripBounds bounds) {
 		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
 		for (int cx = center.x() - 1; cx <= center.x() + 1; cx++) {
 			for (int cz = center.z() - 1; cz <= center.z() + 1; cz++) {
@@ -165,8 +194,8 @@ public final class NetherStripChunkGenerator extends ChunkGenerator implements W
 				for (int lx = 0; lx < 16; lx++) {
 					for (int lz = 0; lz < 16; lz++) {
 						int x = chunkPos.getMinBlockX() + lx, z = chunkPos.getMinBlockZ() + lz;
-						if (this.bounds.inside(x, z)) continue;
-						boolean wall = this.bounds.isWall(x, z);
+						if (bounds.inside(x, z)) continue;
+						boolean wall = bounds.isWall(x, z);
 						BlockState wanted = wall ? DeepTerrain.BARRIER : DeepTerrain.AIR;
 						for (int i = 0; i < sections.length; i++) {
 							LevelChunkSection section = sections[i];
@@ -190,8 +219,8 @@ public final class NetherStripChunkGenerator extends ChunkGenerator implements W
 		ChunkPos pos = chunk.getPos();
 		if (!this.bounds.chunkOverlaps(pos)) return;
 		super.applyBiomeDecoration(level, chunk, structureManager);
-		KeyShrine.rebuild(level, pos, this.bounds); // after this chunk's fortress pieces and features
-		this.clipRegion(level, pos);
+		KeyShrine.rebuild(level, pos, this.bounds, this.layout); // after this chunk's fortress pieces and features
+		clipRegion(level, pos, this.bounds);
 	}
 
 	@Override
@@ -205,14 +234,36 @@ public final class NetherStripChunkGenerator extends ChunkGenerator implements W
 	) {
 		if (!this.bounds.chunkOverlaps(centerChunk.getPos())) return;
 		super.createStructures(registryAccess, state, structureManager, centerChunk, structureTemplateManager, level);
-		if (!centerChunk.getPos().equals(fortressChunk(this.bounds))) return;
+		ChunkPos pos = centerChunk.getPos();
+		if (pos.equals(fortressChunk(this.bounds, this.layout))) {
+			this.startStructure(STRIP_FORTRESS, false, registryAccess, state, structureManager, centerChunk, structureTemplateManager, level);
+		}
+		if (pos.equals(bastionChunk(this.bounds, this.layout))) {
+			this.startStructure(STRIP_BASTION, true, registryAccess, state, structureManager, centerChunk, structureTemplateManager, level);
+		}
+	}
 
-		Holder<Structure> holder = registryAccess.lookupOrThrow(Registries.STRUCTURE).get(STRIP_FORTRESS).orElse(null);
+	/**
+	 * Starts one of our Nether structures in this chunk (they have no structure sets). With
+	 * {@code centre}, the whole structure is shifted so its start piece is centred in the strip:
+	 * the jigsaw start sits at the chunk corner and can rotate away from the narrow strip.
+	 */
+	private void startStructure(
+		ResourceKey<Structure> key,
+		boolean centre,
+		RegistryAccess registryAccess,
+		ChunkGeneratorStructureState state,
+		StructureManager structureManager,
+		ChunkAccess chunk,
+		StructureTemplateManager structureTemplateManager,
+		ResourceKey<Level> level
+	) {
+		Holder<Structure> holder = registryAccess.lookupOrThrow(Registries.STRUCTURE).get(key).orElse(null);
 		if (holder == null) {
-			AntCraft.LOGGER.error("AntCraft: structure {} is missing", STRIP_FORTRESS.identifier());
+			AntCraft.LOGGER.error("AntCraft: structure {} is missing", key.identifier());
 			return;
 		}
-		StructureStart previous = structureManager.getStartForStructure(holder.value(), centerChunk);
+		StructureStart previous = structureManager.getStartForStructure(holder.value(), chunk);
 		RandomState randomState = state.randomState();
 		StructureStart start = holder.value().generate(
 			holder,
@@ -224,17 +275,23 @@ public final class NetherStripChunkGenerator extends ChunkGenerator implements W
 			randomState,
 			structureTemplateManager,
 			state.getLevelSeed(),
-			centerChunk.getPos(),
+			chunk.getPos(),
 			previous != null ? previous.getReferences() : 0,
-			centerChunk,
+			chunk,
 			biome -> true
 		);
-		if (start.isValid()) {
-			structureManager.setStartForStructure(holder.value(), start, centerChunk);
-			AntCraft.LOGGER.info("AntCraft: nether fortress placed, bounds {}", start.getBoundingBox());
-		} else {
-			AntCraft.LOGGER.warn("AntCraft: nether fortress failed to generate");
+		if (!start.isValid()) {
+			AntCraft.LOGGER.warn("AntCraft: {} failed to generate", key.identifier());
+			return;
 		}
+		if (centre) {
+			BoundingBox core = start.getPieces().getFirst().getBoundingBox();
+			int dx = this.bounds.centerX() - (core.minX() + core.maxX()) / 2;
+			int dz = chunk.getPos().getMiddleBlockZ() - (core.minZ() + core.maxZ()) / 2;
+			for (StructurePiece piece : start.getPieces()) piece.move(dx, 0, dz);
+		}
+		structureManager.setStartForStructure(holder.value(), start, chunk);
+		AntCraft.LOGGER.info("AntCraft: {} placed, bounds {}", key.identifier(), start.getBoundingBox());
 	}
 
 	/** See StripChunkGenerator: keep /locate from generating thousands of empty chunks. */

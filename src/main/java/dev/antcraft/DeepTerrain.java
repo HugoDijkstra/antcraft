@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.core.Direction;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -11,6 +12,7 @@ import net.minecraft.world.level.block.CaveVines;
 import net.minecraft.world.level.block.LadderBlock;
 import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.LightBlock;
+import net.minecraft.world.level.block.VineBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.LevelChunkSection;
@@ -168,6 +170,16 @@ public final class DeepTerrain {
 	/** Pond water level: the lowest the rolling forest floor can go, so ponds never spill over. */
 	public static int pondLevel(int layer) {
 		return Strip.forestFloor(layer) - 3;
+	}
+
+	/**
+	 * True if (x, z) is within {@code radius} blocks (square) of the hole in the floor above deep
+	 * layer {@code layer} (floor layer - 1), i.e. right under where you come down into this layer.
+	 */
+	public boolean nearHoleAbove(int layer, int x, int z, int radius) {
+		if (layer < 1 || layer > Strip.DEEP_LAYERS) return false;
+		int k = layer - 1;
+		return Math.abs(x - Strip.holeX(this.seed, k, this.bounds)) <= radius && Math.abs(z - Strip.holeZ(this.seed, k, this.bounds)) <= radius;
 	}
 
 	private boolean isPillar(int layer, int x, int z) {
@@ -348,13 +360,14 @@ public final class DeepTerrain {
 		}
 
 		// hanging glowstone "suns" below the forest ceiling
-		if (glowValue > hangThreshold) {
+		boolean underHole = this.nearHoleAbove(layer, x, z, 2);
+		if (glowValue > hangThreshold && !underHole) {
 			int length = 1 + (int) ((glowValue - hangThreshold) * 16);
 			for (int i = 1; i <= length && ceil - i > surface + 6; i++) {
 				set(chunk, lx, ceil - i, lz, layer == 8 ? SHROOMLIGHT : GLOWSTONE);
 			}
 		}
-		this.decorateForestColumn(chunk, lx, lz, x, z, layer, surface, ceil, pond, ground);
+		if (!underHole) this.decorateForestColumn(chunk, lx, lz, x, z, layer, surface, ceil, pond, ground);
 	}
 
 	private static BlockState pondBottom(int layer) {
@@ -400,9 +413,10 @@ public final class DeepTerrain {
 	 * Ground plants and the invisible light grid of the forests. Runs during decoration, after the
 	 * trees: lights and petals/carpets are not tree-replaceable and would stop trees from growing.
 	 */
-	public void decorateForests(WorldGenLevel level, ChunkAccess chunk) {
+	public void decorateForests(WorldGenLevel level, ChunkAccess chunk, List<BoundingBox> deepPieces) {
 		ChunkPos pos = chunk.getPos();
 		BlockPos.MutableBlockPos at = new BlockPos.MutableBlockPos();
+		this.placeWallVines(level, pos, deepPieces); // before the light grid, which would take their air
 		for (int x = Math.max(pos.getMinBlockX(), this.bounds.minX()); x <= Math.min(pos.getMaxBlockX(), this.bounds.maxX()); x++) {
 			for (int z = Math.max(pos.getMinBlockZ(), this.bounds.minZ()); z <= Math.min(pos.getMaxBlockZ(), this.bounds.maxZ()); z++) {
 				for (int layer = 1; layer <= Strip.DEEP_LAYERS; layer++) {
@@ -428,6 +442,34 @@ public final class DeepTerrain {
 					}
 					if (Math.floorMod(x, 5) == 2 && Math.floorMod(z, 5) == 2 && level.getBlockState(at.set(x, surface + 3, z)).isAir()) {
 						level.setBlock(at, LIGHT_15, Block.UPDATE_CLIENTS);
+					}
+				}
+			}
+		}
+	}
+
+	/** Wall vine curtains: every {@code VINE_SPACING} blocks along z, {@code VINE_WIDTH} wide. */
+	private static final int VINE_SPACING = 8, VINE_WIDTH = 2;
+
+	/**
+	 * Climbable vine curtains on the inside of both long walls in every forest band, hanging on the
+	 * wall's bedrock from just under the forest ceiling down to the floor: a way back up to the hall
+	 * (and a slow way down) without a ladder. Only placed in air, never inside a village.
+	 */
+	private void placeWallVines(WorldGenLevel level, ChunkPos pos, List<BoundingBox> deepPieces) {
+		BlockPos.MutableBlockPos at = new BlockPos.MutableBlockPos();
+		int minZ = Math.max(pos.getMinBlockZ(), this.bounds.minZ()), maxZ = Math.min(pos.getMaxBlockZ(), this.bounds.maxZ());
+		for (int x : new int[] {this.bounds.minX(), this.bounds.maxX()}) {
+			if (x < pos.getMinBlockX() || x > pos.getMaxBlockX()) continue;
+			// the wall is to the west of the strip's first column and to the east of its last one
+			BlockState vine = Blocks.VINE.defaultBlockState().setValue(x == this.bounds.minX() ? VineBlock.WEST : VineBlock.EAST, true);
+			for (int z = minZ; z <= maxZ; z++) {
+				if (Math.floorMod(z - this.bounds.minZ() - 3, VINE_SPACING) >= VINE_WIDTH) continue;
+				for (int layer = 1; layer <= Strip.DEEP_LAYERS; layer++) {
+					if (UndergroundForest.inVillage(deepPieces, layer, x, z, 1)) continue;
+					int surface = this.surfaceAt(layer, x, z);
+					for (int y = this.forestCeiling(layer, x, z) - 1; y > surface; y--) {
+						if (level.getBlockState(at.set(x, y, z)).isAir()) level.setBlock(at, vine, Block.UPDATE_CLIENTS);
 					}
 				}
 			}
@@ -503,13 +545,95 @@ public final class DeepTerrain {
 					setIfInChunk(chunk, pos, hx + dx, floorTop + 1, hz + dz, LANTERN);
 				}
 			}
-			// floor 4's hole is sealed until the player brings the Nether Key
-			if (k == Strip.SEALED_FLOOR && AntCraftConfig.get().netherKeyGate) {
-				setIfInChunk(chunk, pos, hx, floorTop, hz, ModContent.NETHER_SEAL.defaultBlockState());
+			// water to land in, in the forest floor straight below the hole
+			this.cutHolePool(chunk, pos, layerBelow, hx, hz);
+
+			// Sealed holes: floor 4 until the player brings the Nether Key, floor 7 until the Ancient
+			// Key, the boss-room floors until their guardian dies. A gate that is switched off in the
+			// config leaves the plain ladder.
+			AntCraftConfig config = AntCraftConfig.get();
+			BlockState seal = null;
+			if (k == Strip.SEALED_FLOOR && config.netherKeyGate) {
+				seal = ModContent.NETHER_SEAL.defaultBlockState();
+			} else if (k == Strip.ANCIENT_SEALED_FLOOR && config.ancientKeyGate) {
+				seal = ModContent.ANCIENT_SEAL.defaultBlockState();
+			} else if (Strip.isGuardianFloor(k) && config.guardians) {
+				seal = ModContent.GUARDIAN_SEAL.defaultBlockState();
+				this.buildArena(chunk, pos, k, hz);
 			}
+			if (seal != null) setIfInChunk(chunk, pos, hx, floorTop, hz, seal);
 			// keep the hall right above the hole open
 			for (int y = floorTop + 1; y <= floorTop + 3; y++) {
 				setIfInChunk(chunk, pos, hx, y, hz, AIR);
+			}
+		}
+	}
+
+	/**
+	 * The boss room in the hall above floor {@code k} (see {@link ArenaManager}): a wall across the
+	 * strip on each side of the hole, with a 3-wide doorway in the middle, and a closed ceiling so
+	 * caves above the hall don't lead around the walls.
+	 */
+	private void buildArena(ChunkAccess chunk, ChunkPos pos, int k, int hz) {
+		if (hz + ArenaManager.WALL_OFFSET < pos.getMinBlockZ() || hz - ArenaManager.WALL_OFFSET > pos.getMaxBlockZ()) return;
+		int floorTop = Strip.floorTop(k);
+		int ceiling = floorTop + Strip.HALL_HEIGHT + 1;
+		int top = floorTop + Strip.HALL_HEIGHT + ArenaManager.WALL_EXTRA_HEIGHT;
+		BlockState wall = Blocks.POLISHED_BLACKSTONE_BRICKS.defaultBlockState();
+		BlockState stone = BASE_STONE[k];
+		for (int x = this.bounds.minX(); x <= this.bounds.maxX(); x++) {
+			for (int side = -1; side <= 1; side += 2) {
+				int z = hz + side * ArenaManager.WALL_OFFSET;
+				for (int y = floorTop + 1; y <= top; y++) {
+					boolean door = ArenaManager.isDoorway(this.bounds, k, x, y);
+					setIfInChunk(chunk, pos, x, y, z, door ? AIR : wall);
+					if (door) {
+						// keep the way through clear on both sides (a pillar could stand there)
+						setIfInChunk(chunk, pos, x, y, z - 1, AIR);
+						setIfInChunk(chunk, pos, x, y, z + 1, AIR);
+					}
+				}
+			}
+			for (int z = Math.max(hz - ArenaManager.WALL_OFFSET + 1, pos.getMinBlockZ()); z <= Math.min(hz + ArenaManager.WALL_OFFSET - 1, pos.getMaxBlockZ()); z++) {
+				if (x < pos.getMinBlockX() || x > pos.getMaxBlockX() || !this.bounds.inside(x, z)) continue;
+				int lx = x - pos.getMinBlockX(), lz = z - pos.getMinBlockZ();
+				for (int y = ceiling; y <= top; y++) {
+					BlockState state = get(chunk, lx, y, lz);
+					if (state.isAir() || !state.getFluidState().isEmpty()) set(chunk, lx, y, lz, stone);
+				}
+				// a few lights in the ceiling
+				if (Math.floorMod(x - this.bounds.minX(), 6) == 3 && Math.floorMod(z - hz, 6) == 3) set(chunk, lx, ceiling, lz, GLOWSTONE);
+			}
+		}
+	}
+
+	/**
+	 * A 3x3, 2-deep pool in a forest floor, centred under the hole of the floor above: digging
+	 * straight down from the landing room drops you into water instead of onto the ground. The
+	 * columns around it get a rim so the water stays in. Trees and plants skip water columns.
+	 */
+	private void cutHolePool(ChunkAccess chunk, ChunkPos pos, int layer, int hx, int hz) {
+		int top = this.surfaceAt(layer, hx, hz);
+		boolean desert = layer == Strip.DESERT_LAYER;
+		BlockState rim = desert ? Blocks.SANDSTONE.defaultBlockState() : DIRT;
+		BlockState bottom = desert ? Blocks.SANDSTONE.defaultBlockState() : Blocks.CLAY.defaultBlockState();
+		for (int dx = -2; dx <= 2; dx++) {
+			for (int dz = -2; dz <= 2; dz++) {
+				int x = hx + dx, z = hz + dz;
+				if (x < pos.getMinBlockX() || x > pos.getMaxBlockX() || z < pos.getMinBlockZ() || z > pos.getMaxBlockZ() || !this.bounds.inside(x, z)) continue;
+				int lx = x - pos.getMinBlockX(), lz = z - pos.getMinBlockZ();
+				if (Math.abs(dx) <= 1 && Math.abs(dz) <= 1) {
+					set(chunk, lx, top - 2, lz, bottom);
+					set(chunk, lx, top - 1, lz, WATER);
+					set(chunk, lx, top, lz, WATER);
+					// higher ground in this column (rolling hills) is cut away down to the water
+					for (int y = top + 1; y <= Math.max(top, this.surfaceAt(layer, x, z)) + 1; y++) set(chunk, lx, y, lz, AIR);
+				} else {
+					for (int y = top - 1; y <= top; y++) {
+						BlockState state = get(chunk, lx, y, lz);
+						if (state.isAir() || state.getFluidState().is(net.minecraft.tags.FluidTags.LAVA)) set(chunk, lx, y, lz, rim);
+					}
+				}
 			}
 		}
 	}
@@ -539,31 +663,107 @@ public final class DeepTerrain {
 		}
 	}
 
+	/** Leaves are recomputed in this y band around each deep forest (it covers the forest's open air with a margin). */
+	static final int LEAF_BAND_BELOW = 8, LEAF_BAND_ABOVE = Strip.FOREST_HEIGHT + 12;
+
 	/**
-	 * Leaves cut off from their logs (by the walls, clipping or a village piece) would decay and drop
-	 * sticks and saplings on the first random tick. Make them persistent instead.
+	 * Recomputes the leaf distances in the deep forests after decoration, like vanilla does when a
+	 * neighbour changes: a breadth-first search (6 neighbours) from every block in
+	 * {@code #prevents_nearby_leaf_decay} (logs) through leaves. Each leaf gets its real distance
+	 * 1..6; leaves left at 7 (cut off from every log by the walls, clipping or a village piece) are
+	 * removed, so they never decay into sticks and saplings on their own. Everything else keeps
+	 * decaying normally once you chop its tree.
+	 *
+	 * <p>Covers the 3x3 chunk region decoration may write to. Near a side of that region where the
+	 * strip goes on, a log may stand just outside the region: there a leaf only gets closer (never
+	 * further) and is never removed; the neighbouring chunk's own pass covers it fully later.
 	 */
-	public void keepLeaves(WorldGenLevel level, ChunkPos center) {
+	public void recomputeLeaves(WorldGenLevel level, ChunkPos center) {
+		StripBounds b = this.bounds;
+		int minX = Math.max((center.x() - 1) << 4, b.minX()), maxX = Math.min(((center.x() + 1) << 4) + 15, b.maxX());
+		int minZ = Math.max((center.z() - 1) << 4, b.minZ()), maxZ = Math.min(((center.z() + 1) << 4) + 15, b.maxZ());
+		if (minX > maxX || minZ > maxZ) return;
+		// sides of the region where the strip continues (a log could stand beyond them)
+		boolean openMinX = minX > b.minX(), openMaxX = maxX < b.maxX(), openMinZ = minZ > b.minZ(), openMaxZ = maxZ < b.maxZ();
+		int nx = maxX - minX + 1, nz = maxZ - minZ + 1, ny = LEAF_BAND_BELOW + LEAF_BAND_ABOVE + 1;
+		ChunkAccess[] chunks = new ChunkAccess[9];
+		for (int cx = -1; cx <= 1; cx++) {
+			for (int cz = -1; cz <= 1; cz++) {
+				ChunkPos pos = new ChunkPos(center.x() + cx, center.z() + cz);
+				if (b.chunkOverlaps(pos)) chunks[(cx + 1) * 3 + cz + 1] = level.getChunk(pos.x(), pos.z());
+			}
+		}
+
+		byte[] dist = new byte[nx * nz * ny];
+		boolean[] leaf = new boolean[dist.length];
+		int[] queue = new int[dist.length];
 		BlockPos.MutableBlockPos at = new BlockPos.MutableBlockPos();
-		for (int cx = center.x() - 1; cx <= center.x() + 1; cx++) {
-			for (int cz = center.z() - 1; cz <= center.z() + 1; cz++) {
-				ChunkPos pos = new ChunkPos(cx, cz);
-				if (!this.bounds.chunkOverlaps(pos)) continue;
-				ChunkAccess chunk = level.getChunk(cx, cz);
-				StripBounds b = this.bounds;
-				for (int layer = 1; layer <= Strip.DEEP_LAYERS; layer++) {
-					int floor = Strip.forestFloor(layer);
-					for (int x = Math.max(pos.getMinBlockX(), b.minX()); x <= Math.min(pos.getMaxBlockX(), b.maxX()); x++) {
-						for (int z = Math.max(pos.getMinBlockZ(), b.minZ()); z <= Math.min(pos.getMaxBlockZ(), b.maxZ()); z++) {
-							// leaves near a wall may have lost their logs when the outside was cut away
-							boolean nearWall = x <= b.minX() + 5 || x >= b.maxX() - 5 || z <= b.minZ() + 5 || z >= b.maxZ() - 5;
-							for (int y = floor - 4; y <= floor + Strip.FOREST_HEIGHT + 4; y++) {
-								BlockState state = chunk.getBlockState(at.set(x, y, z));
-								if (!state.hasProperty(LeavesBlock.DISTANCE) || !state.hasProperty(LeavesBlock.PERSISTENT) || state.getValue(LeavesBlock.PERSISTENT)) continue;
-								if (nearWall || state.getValue(LeavesBlock.DISTANCE) >= LeavesBlock.DECAY_DISTANCE) {
-									chunk.setBlockState(at, state.setValue(LeavesBlock.PERSISTENT, true));
-								}
-							}
+		for (int layer = 1; layer <= Strip.DEEP_LAYERS; layer++) {
+			int y0 = Math.max(Strip.forestFloor(layer) - LEAF_BAND_BELOW, Strip.layerBottom(layer));
+			int y1 = Math.min(Strip.forestFloor(layer) + LEAF_BAND_ABOVE, Strip.layerTop(layer));
+			int head = 0, tail = 0;
+			boolean anyLeaf = false;
+			for (int x = minX; x <= maxX; x++) {
+				for (int z = minZ; z <= maxZ; z++) {
+					ChunkAccess chunk = chunks[((x >> 4) - center.x() + 1) * 3 + (z >> 4) - center.z() + 1];
+					for (int y = y0; y <= y1; y++) {
+						int i = ((x - minX) * nz + (z - minZ)) * ny + (y - y0);
+						BlockState state = chunk.getBlockState(at.set(x, y, z));
+						leaf[i] = false;
+						dist[i] = LeavesBlock.DECAY_DISTANCE;
+						if (state.is(BlockTags.PREVENTS_NEARBY_LEAF_DECAY)) {
+							dist[i] = 0;
+							queue[tail++] = i;
+						} else if (state.getBlock() instanceof LeavesBlock && state.hasProperty(LeavesBlock.DISTANCE)) {
+							leaf[i] = true;
+							anyLeaf = true;
+						}
+					}
+				}
+			}
+			if (!anyLeaf) continue;
+
+			int h = y1 - y0 + 1;
+			while (head < tail) {
+				int i = queue[head++];
+				int d = dist[i] + 1;
+				if (d >= LeavesBlock.DECAY_DISTANCE) continue;
+				int iy = i % ny, ixz = i / ny, iz = ixz % nz, ix = ixz / nz;
+				for (int dir = 0; dir < 6; dir++) {
+					int j;
+					switch (dir) {
+						case 0 -> j = iy > 0 ? i - 1 : -1;
+						case 1 -> j = iy < h - 1 ? i + 1 : -1;
+						case 2 -> j = iz > 0 ? i - ny : -1;
+						case 3 -> j = iz < nz - 1 ? i + ny : -1;
+						case 4 -> j = ix > 0 ? i - nz * ny : -1;
+						default -> j = ix < nx - 1 ? i + nz * ny : -1;
+					}
+					if (j >= 0 && leaf[j] && dist[j] > d) {
+						dist[j] = (byte) d;
+						queue[tail++] = j;
+					}
+				}
+			}
+
+			// write the distances back; remove what is cut off
+			for (int x = minX; x <= maxX; x++) {
+				for (int z = minZ; z <= maxZ; z++) {
+					int ix = x - minX, iz = z - minZ;
+					boolean nearOpen = (openMinX && ix < LeavesBlock.DECAY_DISTANCE - 1) || (openMaxX && nx - 1 - ix < LeavesBlock.DECAY_DISTANCE - 1)
+						|| (openMinZ && iz < LeavesBlock.DECAY_DISTANCE - 1) || (openMaxZ && nz - 1 - iz < LeavesBlock.DECAY_DISTANCE - 1);
+					ChunkAccess chunk = null;
+					for (int y = y0; y <= y1; y++) {
+						int i = (ix * nz + iz) * ny + (y - y0);
+						if (!leaf[i]) continue;
+						if (chunk == null) chunk = chunks[((x >> 4) - center.x() + 1) * 3 + (z >> 4) - center.z() + 1];
+						BlockState state = chunk.getBlockState(at.set(x, y, z));
+						int old = state.getValue(LeavesBlock.DISTANCE);
+						int d = nearOpen ? Math.min(dist[i], old) : dist[i];
+						if (d >= LeavesBlock.DECAY_DISTANCE && !nearOpen && !state.getValue(LeavesBlock.PERSISTENT)) {
+							chunk.setBlockState(at, state.getFluidState().createLegacyBlock());
+						} else if (d != old) {
+							chunk.setBlockState(at, state.setValue(LeavesBlock.DISTANCE, d));
 						}
 					}
 				}

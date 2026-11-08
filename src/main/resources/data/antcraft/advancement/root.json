@@ -1,0 +1,28 @@
+{
+  "display": {
+    "icon": {
+      "id": "minecraft:ladder"
+    },
+    "title": {
+      "translate": "advancements.antcraft.root.title",
+      "fallback": "AntCraft"
+    },
+    "description": {
+      "translate": "advancements.antcraft.root.description",
+      "fallback": "A narrow strip of world, two thousand blocks deep"
+    },
+    "background": "minecraft:gui/advancements/backgrounds/stone",
+    "show_toast": false,
+    "announce_to_chat": false
+  },
+  "criteria": {
+    "in_strip": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "in_strip"
+    ]
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "parent": "antcraft:layer_7",
+  "display": {
+    "icon": {
+      "id": "antcraft:ancient_key"
+    },
+    "title": {
+      "translate": "advancements.antcraft.opened_ancient_seal.title",
+      "fallback": "Ancient Lock"
+    },
+    "description": {
+      "translate": "advancements.antcraft.opened_ancient_seal.description",
+      "fallback": "Open the Ancient Seal on floor 7 with an Ancient Key"
+    },
+    "frame": "goal"
+  },
+  "criteria": {
+    "opened": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "opened"
+    ]
+  ]
+}

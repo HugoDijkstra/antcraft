@@ -1,0 +1,27 @@
+{
+  "parent": "antcraft:bottom",
+  "display": {
+    "icon": {
+      "id": "minecraft:end_portal_frame"
+    },
+    "title": {
+      "translate": "advancements.antcraft.enter_end.title",
+      "fallback": "The Long Way Down"
+    },
+    "description": {
+      "translate": "advancements.antcraft.enter_end.description",
+      "fallback": "Enter the End through the portal at the bottom of the strip"
+    },
+    "frame": "challenge"
+  },
+  "criteria": {
+    "entered_end": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "entered_end"
+    ]
+  ]
+}

@@ -33,13 +33,16 @@ public final class KeyShrine {
 		return bounds.centerX() - SIZE / 2;
 	}
 
-	/** North wall z: a sixth of the way along the strip (z 50..59 for 300 long), 2 blocks into a chunk. */
-	static int minZ(StripBounds bounds) {
-		return ((bounds.scaledZ(50) >> 4) << 4) + 2;
+	/**
+	 * North wall z: two fifths of the way along the strip (z 120..129 for 300 long), between the
+	 * bastion and the fortress; in Nether layout 1 a sixth of the way (z 50..59), 2 blocks into a chunk.
+	 */
+	static int minZ(StripBounds bounds, int layout) {
+		return layout >= 2 ? bounds.scaledZ(120) : ((bounds.scaledZ(50) >> 4) << 4) + 2;
 	}
 
-	public static BlockPos chestPos(StripBounds bounds) {
-		return new BlockPos(minX(bounds) + 4, FLOOR_Y + 2, minZ(bounds) + 4);
+	public static BlockPos chestPos(StripBounds bounds, int layout) {
+		return new BlockPos(minX(bounds) + 4, FLOOR_Y + 2, minZ(bounds, layout) + 4);
 	}
 
 	/**
@@ -53,8 +56,8 @@ public final class KeyShrine {
 	 *
 	 * <p>Every block is a pure function of its position and the seed, so rebuilding is idempotent.
 	 */
-	static void rebuild(WorldGenLevel level, ChunkPos center, StripBounds bounds) {
-		final int minX = minX(bounds), maxX = minX + SIZE - 1, minZ = minZ(bounds), maxZ = minZ + SIZE - 1;
+	static void rebuild(WorldGenLevel level, ChunkPos center, StripBounds bounds, int layout) {
+		final int minX = minX(bounds), maxX = minX + SIZE - 1, minZ = minZ(bounds, layout), maxZ = minZ + SIZE - 1;
 		final int midX = minX + SIZE / 2 - 1, midZ = minZ + SIZE / 2 - 1; // the west / north of the two middle rows
 		// the region this decoration step may write to: the chunk and its 8 neighbours
 		final int regionMinX = (center.x() - 1) << 4, regionMaxX = ((center.x() + 1) << 4) + 15;
@@ -98,7 +101,7 @@ public final class KeyShrine {
 		}
 
 		// pedestal + key chest
-		BlockPos chest = chestPos(bounds);
+		BlockPos chest = chestPos(bounds, layout);
 		if (inRegion(chest, regionMinX, regionMaxX, regionMinZ, regionMaxZ)) {
 			put(level, chest.below(), Blocks.CHISELED_NETHER_BRICKS.defaultBlockState());
 			put(level, chest, Blocks.CHEST.defaultBlockState().setValue(ChestBlock.FACING, Direction.SOUTH));

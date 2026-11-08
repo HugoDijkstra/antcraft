@@ -1,0 +1,27 @@
+{
+  "parent": "antcraft:layer_2",
+  "display": {
+    "icon": {
+      "id": "minecraft:saddle"
+    },
+    "title": {
+      "translate": "advancements.antcraft.guardian_2.title",
+      "fallback": "Beast Tamer"
+    },
+    "description": {
+      "translate": "advancements.antcraft.guardian_2.description",
+      "fallback": "Defeat the Deep Beast guarding floor 2"
+    },
+    "frame": "challenge"
+  },
+  "criteria": {
+    "defeated": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "defeated"
+    ]
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "parent": "antcraft:layer_8",
+  "display": {
+    "icon": {
+      "id": "minecraft:bedrock"
+    },
+    "title": {
+      "translate": "advancements.antcraft.bottom.title",
+      "fallback": "Rock Bottom"
+    },
+    "description": {
+      "translate": "advancements.antcraft.bottom.description",
+      "fallback": "Reach the very bottom of the strip"
+    },
+    "frame": "goal"
+  },
+  "criteria": {
+    "reached": {
+      "trigger": "minecraft:location",
+      "conditions": {
+        "player": {
+          "type": "minecraft:entity_properties",
+          "entity": "this",
+          "predicate": {
+            "minecraft:location": {
+              "position": {
+                "y": {
+                  "max": -2017.0
+                }
+              },
+              "dimension": "minecraft:overworld"
+            }
+          }
+        }
+      }
+    }
+  },
+  "requirements": [
+    [
+      "reached"
+    ]
+  ]
+}

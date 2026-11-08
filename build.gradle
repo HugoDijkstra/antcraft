@@ -34,6 +34,18 @@ dependencies {
 
 	// Mod Menu: optional, only for the config screen entrypoint. Not bundled, not needed at runtime.
 	compileOnly("com.terraformersmc:modmenu:${project.modmenu_version}") { transitive = false }
+
+	// Unit tests for the pure strip geometry (./gradlew test, also part of ./gradlew build).
+	testImplementation platform("org.junit:junit-bom:5.13.4")
+	testImplementation "org.junit.jupiter:junit-jupiter"
+	testRuntimeOnly "org.junit.platform:junit-platform-launcher"
+}
+
+test {
+	useJUnitPlatform()
+	workingDir = layout.buildDirectory.dir("test-run").get().asFile // log4j writes logs/ into the working dir
+	doFirst { workingDir.mkdirs() }
+	testLogging { events "failed"; exceptionFormat "full" }
 }
 
 processResources {

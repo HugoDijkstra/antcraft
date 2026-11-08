@@ -54,11 +54,15 @@ public final class UndergroundForest {
 
 	/** True if (x, z) lies under a deep structure piece (a village) in this layer's forest band. */
 	private static boolean inVillage(List<BoundingBox> pieces, int layer, int x, int z) {
+		return inVillage(pieces, layer, x, z, 6);
+	}
+
+	static boolean inVillage(List<BoundingBox> pieces, int layer, int x, int z, int margin) {
 		int floor = Strip.forestFloor(layer);
 		for (BoundingBox box : pieces) {
 			if (box.maxY() < floor - 12 || box.minY() > floor + Strip.FOREST_HEIGHT) continue;
 			// wide margin: big trees (2x2 trunks, wide canopies) must not reach into the village
-			if (x >= box.minX() - 6 && x <= box.maxX() + 6 && z >= box.minZ() - 6 && z <= box.maxZ() + 6) return true;
+			if (x >= box.minX() - margin && x <= box.maxX() + margin && z >= box.minZ() - margin && z <= box.maxZ() + margin) return true;
 		}
 		return false;
 	}
@@ -112,6 +116,8 @@ public final class UndergroundForest {
 				int z = Math.clamp(minZ + random.nextInt(maxZ - minZ + 1), bounds.minZ() + 1, bounds.maxZ() - 1);
 				ResourceKey<Feature> key = pick(choices, random);
 				if (inVillage(deepPieces, layer, x, z)) continue;
+				// keep the fall line from the hole above clear, so digging down lands in the pool
+				if (terrain.nearHoleAbove(layer, x, z, 4)) continue;
 				BlockPos ground = findGround(level, terrain, layer, x, z);
 				if (ground == null) continue;
 				Holder<Feature> feature = features.get(key).orElse(null);

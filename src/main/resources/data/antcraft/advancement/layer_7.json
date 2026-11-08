@@ -1,0 +1,43 @@
+{
+  "parent": "antcraft:layer_6",
+  "display": {
+    "icon": {
+      "id": "minecraft:mangrove_propagule"
+    },
+    "title": {
+      "translate": "advancements.antcraft.layer_7.title",
+      "fallback": "Mangrove Mire"
+    },
+    "description": {
+      "translate": "advancements.antcraft.layer_7.description",
+      "fallback": "Reach layer 7"
+    }
+  },
+  "criteria": {
+    "reached": {
+      "trigger": "minecraft:location",
+      "conditions": {
+        "player": {
+          "type": "minecraft:entity_properties",
+          "entity": "this",
+          "predicate": {
+            "minecraft:location": {
+              "position": {
+                "y": {
+                  "min": -1853.0,
+                  "max": -1600.001
+                }
+              },
+              "dimension": "minecraft:overworld"
+            }
+          }
+        }
+      }
+    }
+  },
+  "requirements": [
+    [
+      "reached"
+    ]
+  ]
+}

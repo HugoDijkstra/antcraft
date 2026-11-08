@@ -1,0 +1,38 @@
+{
+  "parent": "antcraft:layer_5",
+  "display": {
+    "icon": {
+      "id": "minecraft:sculk_shrieker"
+    },
+    "title": {
+      "translate": "advancements.antcraft.ancient_city.title",
+      "fallback": "City in the Deep"
+    },
+    "description": {
+      "translate": "advancements.antcraft.ancient_city.description",
+      "fallback": "Find the ancient city below the Deep Dark forest"
+    }
+  },
+  "criteria": {
+    "found": {
+      "trigger": "minecraft:location",
+      "conditions": {
+        "player": {
+          "type": "minecraft:entity_properties",
+          "entity": "this",
+          "predicate": {
+            "minecraft:location": {
+              "structures": "antcraft:deep_ancient_city",
+              "dimension": "minecraft:overworld"
+            }
+          }
+        }
+      }
+    }
+  },
+  "requirements": [
+    [
+      "found"
+    ]
+  ]
+}

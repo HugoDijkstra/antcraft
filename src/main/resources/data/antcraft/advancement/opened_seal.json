@@ -1,0 +1,27 @@
+{
+  "parent": "antcraft:layer_4",
+  "display": {
+    "icon": {
+      "id": "antcraft:nether_key"
+    },
+    "title": {
+      "translate": "advancements.antcraft.opened_seal.title",
+      "fallback": "Unsealed"
+    },
+    "description": {
+      "translate": "advancements.antcraft.opened_seal.description",
+      "fallback": "Open the Nether Seal on floor 4 with a Nether Key"
+    },
+    "frame": "goal"
+  },
+  "criteria": {
+    "opened": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "opened"
+    ]
+  ]
+}

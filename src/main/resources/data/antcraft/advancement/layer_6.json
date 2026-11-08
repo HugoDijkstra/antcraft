@@ -1,0 +1,43 @@
+{
+  "parent": "antcraft:layer_5",
+  "display": {
+    "icon": {
+      "id": "minecraft:sand"
+    },
+    "title": {
+      "translate": "advancements.antcraft.layer_6.title",
+      "fallback": "Buried Desert"
+    },
+    "description": {
+      "translate": "advancements.antcraft.layer_6.description",
+      "fallback": "Reach layer 6"
+    }
+  },
+  "criteria": {
+    "reached": {
+      "trigger": "minecraft:location",
+      "conditions": {
+        "player": {
+          "type": "minecraft:entity_properties",
+          "entity": "this",
+          "predicate": {
+            "minecraft:location": {
+              "position": {
+                "y": {
+                  "min": -1597.0,
+                  "max": -1344.001
+                }
+              },
+              "dimension": "minecraft:overworld"
+            }
+          }
+        }
+      }
+    }
+  },
+  "requirements": [
+    [
+      "reached"
+    ]
+  ]
+}

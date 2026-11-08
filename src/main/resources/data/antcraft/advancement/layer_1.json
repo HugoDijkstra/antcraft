@@ -1,0 +1,43 @@
+{
+  "parent": "antcraft:root",
+  "display": {
+    "icon": {
+      "id": "minecraft:oak_sapling"
+    },
+    "title": {
+      "translate": "advancements.antcraft.layer_1.title",
+      "fallback": "Oak Hollow"
+    },
+    "description": {
+      "translate": "advancements.antcraft.layer_1.description",
+      "fallback": "Climb down through the first bedrock floor"
+    }
+  },
+  "criteria": {
+    "reached": {
+      "trigger": "minecraft:location",
+      "conditions": {
+        "player": {
+          "type": "minecraft:entity_properties",
+          "entity": "this",
+          "predicate": {
+            "minecraft:location": {
+              "position": {
+                "y": {
+                  "min": -317.0,
+                  "max": -64.001
+                }
+              },
+              "dimension": "minecraft:overworld"
+            }
+          }
+        }
+      }
+    }
+  },
+  "requirements": [
+    [
+      "reached"
+    ]
+  ]
+}

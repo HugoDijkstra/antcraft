@@ -72,6 +72,19 @@ public final class Strip {
 	/** The hole of this floor is covered by a Nether Seal; the Nether Key from the Nether strip opens it. */
 	public static final int SEALED_FLOOR = 4;
 
+	/** The hole of this floor is covered by an Ancient Seal; an Ancient Key from the ancient city opens it. */
+	public static final int ANCIENT_SEALED_FLOOR = 7;
+
+	/** Floors whose hall is a closed boss room; the hole opens when the floor's guardian dies. */
+	public static final int[] GUARDIAN_FLOORS = {0, 2, 6};
+
+	public static boolean isGuardianFloor(int k) {
+		for (int floor : GUARDIAN_FLOORS) {
+			if (floor == k) return true;
+		}
+		return false;
+	}
+
 	/** The underground desert. */
 	public static final int DESERT_LAYER = 6;
 	public static final int CITY_START_Y = -1280; // keep in sync with deep_ancient_city.json
@@ -163,6 +176,39 @@ public final class Strip {
 		int base = (int) Math.floorMod(mix(seed, 7000), (long) rows);
 		int chunkX = layer % 2 == 0 ? bounds.minX() >> 4 : bounds.maxX() >> 4;
 		return new ChunkPos(chunkX, firstRow + 1 + Math.floorMod(base + layer * villageStep(rows), rows));
+	}
+
+	// ---------------------------------------------------------------- underground desert pyramid
+
+	/** The pyramid is 21 x 21 blocks; its north edge sits this far into its start chunk. */
+	public static final int PYRAMID_SIZE = 21, PYRAMID_OFFSET_Z = 4;
+
+	/**
+	 * Chunk where the desert pyramid of the underground desert (layer 6) starts: in the middle of the
+	 * strip's width, in a seeded chunk row at least six rows (96 blocks) from the layer's village if
+	 * the strip is long enough (else as far as it can be), preferably not under the hole of the
+	 * floor above, and always with the whole pyramid inside the strip's length.
+	 */
+	public static ChunkPos pyramidChunk(long seed, StripBounds bounds) {
+		int firstRow = (bounds.minZ() + 1 - PYRAMID_OFFSET_Z + 15) >> 4; // north edge at least 1 block from the wall
+		int lastRow = (bounds.maxZ() - 1 - PYRAMID_OFFSET_Z - (PYRAMID_SIZE - 1)) >> 4;
+		if (lastRow < firstRow) lastRow = firstRow;
+		int rows = lastRow - firstRow + 1;
+		int villageRow = villageChunk(seed, DESERT_LAYER, bounds).z();
+		int holeZ = holeZ(seed, DESERT_LAYER - 1, bounds);
+		int startIndex = (int) Math.floorMod(mix(seed, 8000), (long) rows);
+		int best = firstRow, bestScore = -1;
+		for (int i = 0; i < rows; i++) {
+			int row = firstRow + (startIndex + i) % rows;
+			int north = (row << 4) + PYRAMID_OFFSET_Z;
+			boolean underHole = holeZ >= north - 6 && holeZ <= north + PYRAMID_SIZE + 5;
+			int score = Math.min(Math.abs(row - villageRow), 6) * 2 + (underHole ? 0 : 1);
+			if (score > bestScore) {
+				bestScore = score;
+				best = row;
+			}
+		}
+		return new ChunkPos(bounds.centerX() >> 4, best);
 	}
 
 	/** Row step between consecutive layers' villages: about rows / 8 (2 for 17 rows), coprime with rows. */

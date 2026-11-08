@@ -1,0 +1,33 @@
+{
+  "parent": "antcraft:ancient_city",
+  "display": {
+    "icon": {
+      "id": "antcraft:ancient_key"
+    },
+    "title": {
+      "translate": "advancements.antcraft.ancient_key.title",
+      "fallback": "Key of the Deep"
+    },
+    "description": {
+      "translate": "advancements.antcraft.ancient_key.description",
+      "fallback": "Find an Ancient Key in the ancient city"
+    }
+  },
+  "criteria": {
+    "has_key": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": "antcraft:ancient_key"
+          }
+        ]
+      }
+    }
+  },
+  "requirements": [
+    [
+      "has_key"
+    ]
+  ]
+}

@@ -8,7 +8,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import dev.antcraft.mixin.ScatteredFeaturePieceAccessor;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
@@ -37,6 +39,8 @@ import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.levelgen.structure.StructurePiece;
 import net.minecraft.world.level.levelgen.structure.StructureStart;
+import net.minecraft.world.level.levelgen.structure.pieces.PiecesContainer;
+import net.minecraft.world.level.levelgen.structure.structures.DesertPyramidPiece;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager;
 import org.jspecify.annotations.Nullable;
 
@@ -60,6 +64,10 @@ public final class StripChunkGenerator extends ChunkGenerator implements Wrapped
 
 	public static final ResourceKey<Structure> DEEP_CITY = ResourceKey.create(
 		Registries.STRUCTURE, Identifier.fromNamespaceAndPath(AntCraft.MOD_ID, "deep_ancient_city")
+	);
+
+	public static final ResourceKey<Structure> DEEP_PYRAMID = ResourceKey.create(
+		Registries.STRUCTURE, Identifier.fromNamespaceAndPath(AntCraft.MOD_ID, "deep_desert_pyramid")
 	);
 
 	/**
@@ -304,11 +312,54 @@ public final class StripChunkGenerator extends ChunkGenerator implements Wrapped
 		super.applyBiomeDecoration(level, chunk, structureManager);
 		DeepTerrain terrain = this.terrain(level.getSeed());
 		terrain.sealAboveFirstHall(level, pos);
-		UndergroundForest.placeTrees(level, this, chunk, terrain, findDeepPieces(structureManager, pos));
-		terrain.decorateForests(level, chunk); // plants and lights after trees, so they don't block them
+		List<BoundingBox> deepPieces = findDeepPieces(structureManager, pos);
+		UndergroundForest.placeTrees(level, this, chunk, terrain, deepPieces);
+		terrain.decorateForests(level, chunk, deepPieces); // plants and lights after trees, so they don't block them
 		PortalRoom.placeBlockEntities(level, chunk, level.getSeed(), this.bounds);
+		if (pos.equals(Strip.cityChunk(this.bounds))) this.placeCityKeyChest(level, pos, deepPieces);
 		this.clipRegion(level, pos);
-		terrain.keepLeaves(level, pos);
+		terrain.recomputeLeaves(level, pos);
+	}
+
+	/**
+	 * One guaranteed ancient city chest (with the Ancient Key, see the loot hook in {@link AntCraft})
+	 * inside the strip: on the lowest free floor of a city piece in the city's start chunk, after
+	 * that chunk's pieces were placed.
+	 */
+	private void placeCityKeyChest(WorldGenLevel level, ChunkPos pos, List<BoundingBox> deepPieces) {
+		int minX = Math.max(pos.getMinBlockX(), this.bounds.minX() + 1), maxX = Math.min(pos.getMaxBlockX(), this.bounds.maxX() - 1);
+		int minZ = Math.max(pos.getMinBlockZ(), this.bounds.minZ() + 1), maxZ = Math.min(pos.getMaxBlockZ(), this.bounds.maxZ() - 1);
+		int midX = (minX + maxX) / 2, midZ = (minZ + maxZ) / 2;
+		BlockPos best = null;
+		long bestScore = Long.MAX_VALUE;
+		BlockPos.MutableBlockPos at = new BlockPos.MutableBlockPos();
+		for (BoundingBox box : deepPieces) {
+			if (box.minY() < Strip.CITY_MIN_Y - 10 || box.maxY() > Strip.CITY_MAX_Y) continue; // a village, not the city
+			for (int x = Math.max(minX, box.minX()); x <= Math.min(maxX, box.maxX()); x++) {
+				for (int z = Math.max(minZ, box.minZ()); z <= Math.min(maxZ, box.maxZ()); z++) {
+					for (int y = box.minY() + 1; y < box.maxY() - 1; y++) {
+						if (!level.getBlockState(at.set(x, y, z)).isAir() || !level.getBlockState(at.set(x, y + 1, z)).isAir()) continue;
+						BlockState below = level.getBlockState(at.set(x, y - 1, z));
+						if (!below.isFaceSturdy(level, at, net.minecraft.core.Direction.UP) || !below.getFluidState().isEmpty()) continue;
+						long score = (long) (y - Strip.CITY_MIN_Y) * 10000 + Math.abs(x - midX) + Math.abs(z - midZ);
+						if (score < bestScore) {
+							bestScore = score;
+							best = new BlockPos(x, y, z);
+						}
+						break; // lowest free floor in this column
+					}
+				}
+			}
+		}
+		if (best == null) {
+			AntCraft.LOGGER.warn("AntCraft: no spot for the ancient city key chest in chunk {}", pos);
+			return;
+		}
+		level.setBlock(best, net.minecraft.world.level.block.Blocks.CHEST.defaultBlockState(), net.minecraft.world.level.block.Block.UPDATE_CLIENTS);
+		net.minecraft.world.RandomizableContainer.setBlockEntityLootTable(
+			level, net.minecraft.util.RandomSource.create(Strip.mix(level.getSeed(), 5001)), best, net.minecraft.world.level.storage.loot.BuiltInLootTables.ANCIENT_CITY
+		);
+		AntCraft.LOGGER.info("AntCraft: ancient city key chest at {}", best);
 	}
 
 	@Override
@@ -348,6 +399,39 @@ public final class StripChunkGenerator extends ChunkGenerator implements Wrapped
 				this.startDeepStructure(village, ground, registryAccess, state, structureManager, centerChunk, structureTemplateManager, level);
 			}
 		}
+		if (centerChunk.getPos().equals(Strip.pyramidChunk(state.getLevelSeed(), this.bounds))) {
+			this.startDeepPyramid(registryAccess, state.getLevelSeed(), structureManager, centerChunk);
+		}
+	}
+
+	/**
+	 * The desert pyramid of the underground desert. A single hand-made piece: built facing north or
+	 * south (so its entrance opens along the strip), centred in the strip's width, sunk one block
+	 * into the forest floor like vanilla does on the surface. Its {@code heightPosition} is set so
+	 * the piece is not projected onto the real surface when it is placed. The forest floor under it
+	 * is flattened and kept free of trees like under the deep villages (it is a deep structure piece).
+	 */
+	private void startDeepPyramid(RegistryAccess registryAccess, long seed, StructureManager structureManager, ChunkAccess chunk) {
+		Holder<Structure> holder = registryAccess.lookupOrThrow(Registries.STRUCTURE).get(DEEP_PYRAMID).orElse(null);
+		if (holder == null) {
+			AntCraft.LOGGER.error("AntCraft: structure {} is missing", DEEP_PYRAMID.identifier());
+			return;
+		}
+		Structure structure = holder.value();
+		ChunkPos pos = chunk.getPos();
+		int west = this.bounds.centerX() - Strip.PYRAMID_SIZE / 2;
+		int north = pos.getMinBlockZ() + Strip.PYRAMID_OFFSET_Z;
+		net.minecraft.util.RandomSource random = net.minecraft.util.RandomSource.create(Strip.mix(seed, 8001));
+		DesertPyramidPiece piece = new DesertPyramidPiece(random, west, north);
+		for (int i = 0; i < 64 && piece.getOrientation() != Direction.NORTH && piece.getOrientation() != Direction.SOUTH; i++) {
+			piece = new DesertPyramidPiece(random, west, north);
+		}
+		piece.move(0, Strip.forestFloor(Strip.DESERT_LAYER) - piece.getBoundingBox().minY(), 0);
+		((ScatteredFeaturePieceAccessor) piece).antcraft$setHeightPosition(0);
+		StructureStart previous = structureManager.getStartForStructure(structure, chunk);
+		StructureStart start = new StructureStart(structure, pos, previous != null ? previous.getReferences() : 0, new PiecesContainer(List.of(piece)));
+		structureManager.setStartForStructure(structure, start, chunk);
+		AntCraft.LOGGER.info("AntCraft: {} placed facing {}, bounds {}", DEEP_PYRAMID.identifier(), piece.getOrientation(), start.getBoundingBox());
 	}
 
 	/**

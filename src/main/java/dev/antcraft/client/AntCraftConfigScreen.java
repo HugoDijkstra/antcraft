@@ -63,12 +63,16 @@ public final class AntCraftConfigScreen extends Screen {
 		this.addRenderableWidget(toggle(right, y, "layer_titles", c.layerTitles, v -> c.layerTitles = v));
 		y += ROW;
 		this.addRenderableWidget(toggle(left, y, "spawn_mobs_near_players", c.spawnMobsNearPlayers, v -> c.spawnMobsNearPlayers = v));
-		this.addRenderableWidget(toggle(right, y, "guardians", c.guardians, v -> c.guardians = v));
+		CycleButton<Boolean> guardians = toggle(right, y, "guardians", c.guardians, v -> c.guardians = v);
+		guardians.setTooltip(Tooltip.create(Component.translatable("antcraft.config.guardians.tooltip")));
+		this.addRenderableWidget(guardians);
 		y += ROW;
 		CycleButton<Boolean> netherGate = toggle(left, y, "nether_key_gate", c.netherKeyGate, v -> c.netherKeyGate = v);
 		netherGate.setTooltip(Tooltip.create(Component.translatable("antcraft.config.nether_key_gate.tooltip")));
 		this.addRenderableWidget(netherGate);
-		this.addRenderableWidget(toggle(right, y, "ancient_key_gate", c.ancientKeyGate, v -> c.ancientKeyGate = v));
+		CycleButton<Boolean> ancientGate = toggle(right, y, "ancient_key_gate", c.ancientKeyGate, v -> c.ancientKeyGate = v);
+		ancientGate.setTooltip(Tooltip.create(Component.translatable("antcraft.config.ancient_key_gate.tooltip")));
+		this.addRenderableWidget(ancientGate);
 
 		int bottom = this.height - 28;
 		this.addRenderableWidget(Button.builder(CommonComponents.GUI_DONE, b -> {

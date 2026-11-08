@@ -1,5 +1,6 @@
 package dev.antcraft.mixin;
 
+import dev.antcraft.EndStripChunkGenerator;
 import dev.antcraft.NetherStripChunkGenerator;
 import dev.antcraft.StripChunkGenerator;
 import net.minecraft.world.level.dimension.LevelStem;
@@ -26,6 +27,13 @@ public abstract class WorldDimensionsMixin {
 	@Inject(method = "isStableNether", at = @At("HEAD"), cancellable = true)
 	private static void antcraft$netherStripIsStable(LevelStem dimension, CallbackInfoReturnable<Boolean> cir) {
 		if (dimension.generator() instanceof NetherStripChunkGenerator) {
+			cir.setReturnValue(true);
+		}
+	}
+
+	@Inject(method = "isStableEnd", at = @At("HEAD"), cancellable = true)
+	private static void antcraft$endStripIsStable(LevelStem dimension, CallbackInfoReturnable<Boolean> cir) {
+		if (dimension.generator() instanceof EndStripChunkGenerator) {
 			cir.setReturnValue(true);
 		}
 	}

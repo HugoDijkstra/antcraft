@@ -36,9 +36,13 @@ public final class AntCraft implements ModInitializer {
 		AntCraftConfig.load();
 		Registry.register(BuiltInRegistries.CHUNK_GENERATOR, Identifier.fromNamespaceAndPath(MOD_ID, "strip"), StripChunkGenerator.CODEC);
 		Registry.register(BuiltInRegistries.CHUNK_GENERATOR, Identifier.fromNamespaceAndPath(MOD_ID, "nether_strip"), NetherStripChunkGenerator.CODEC);
+		Registry.register(BuiltInRegistries.CHUNK_GENERATOR, Identifier.fromNamespaceAndPath(MOD_ID, "end_strip"), EndStripChunkGenerator.CODEC);
 		Registry.register(BuiltInRegistries.BIOME_SOURCE, Identifier.fromNamespaceAndPath(MOD_ID, "strip"), StripBiomeSource.CODEC);
 		ModContent.register();
 		MiningHardness.register();
+		LayerTracker.register();
+		ArenaManager.register();
+		SelfCheck.register();
 
 		// Backup source of the Nether Key: fortress chests (the shrine in the Nether strip always has one).
 		// Added when the loot is rolled rather than to the table, so vanilla worlds don't get the key.
@@ -47,13 +51,17 @@ public final class AntCraft implements ModInitializer {
 			if (table.is(BuiltInLootTables.NETHER_BRIDGE) && isStripLevel(context.getLevel()) && context.getRandom().nextFloat() < 0.5F) {
 				drops.add(new ItemStack(ModContent.NETHER_KEY));
 			}
+			// the Ancient Key for floor 7's seal: in every ancient city chest of a strip world
+			if (table.is(BuiltInLootTables.ANCIENT_CITY) && isStripLevel(context.getLevel())) {
+				drops.add(new ItemStack(ModContent.ANCIENT_KEY));
+			}
 		});
 
 		ServerLifecycleEvents.SERVER_STARTED.register(AntCraft::onServerStarted);
 		ServerTickEvents.END_SERVER_TICK.register(AntCraft::onServerTick);
 	}
 
-	/** The strip overworld or the strip Nether (any dimension whose generator is a strip). */
+	/** The strip overworld, Nether or End (any dimension whose generator is a strip). */
 	public static boolean isStripLevel(ServerLevel level) {
 		return level.getChunkSource().getGenerator() instanceof StripGenerator;
 	}
@@ -184,7 +192,16 @@ public final class AntCraft implements ModInitializer {
 				if (isSafe(level, feet) && level.getBlockState(feet.above()).isAir()) return feet;
 			}
 		}
-		// nothing safe nearby: world spawn in the overworld, the key shrine's floor in the Nether
-		return level.dimension() == net.minecraft.world.level.Level.NETHER ? KeyShrine.chestPos(bounds).south(2).below() : level.getRespawnData().pos();
+		// nothing safe nearby: world spawn in the overworld, the key shrine's floor in the Nether,
+		// the arrival platform (rebuilt if needed) in the End
+		if (level.getChunkSource().getGenerator() instanceof NetherStripChunkGenerator nether) {
+			return KeyShrine.chestPos(bounds, nether.layout()).south(2).below();
+		}
+		if (level.getChunkSource().getGenerator() instanceof EndStripChunkGenerator) {
+			BlockPos spawn = EndStripChunkGenerator.spawnPoint(bounds);
+			net.minecraft.world.level.levelgen.feature.EndPlatformFeature.createEndPlatform(level, spawn.below(), true);
+			return spawn;
+		}
+		return level.getRespawnData().pos();
 	}
 }

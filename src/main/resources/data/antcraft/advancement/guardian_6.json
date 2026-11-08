@@ -1,0 +1,27 @@
+{
+  "parent": "antcraft:layer_6",
+  "display": {
+    "icon": {
+      "id": "minecraft:husk_spawn_egg"
+    },
+    "title": {
+      "translate": "advancements.antcraft.guardian_6.title",
+      "fallback": "Colossal Fall"
+    },
+    "description": {
+      "translate": "advancements.antcraft.guardian_6.description",
+      "fallback": "Defeat the Desert Colossus guarding floor 6"
+    },
+    "frame": "challenge"
+  },
+  "criteria": {
+    "defeated": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "defeated"
+    ]
+  ]
+}

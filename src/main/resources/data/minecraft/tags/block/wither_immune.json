@@ -1,4 +1,9 @@
 {
   "replace": false,
-  "values": ["antcraft:nether_seal"]
+  "values": [
+    "antcraft:nether_seal",
+    "antcraft:ancient_seal",
+    "antcraft:guardian_seal",
+    "antcraft:arena_gate"
+  ]
 }

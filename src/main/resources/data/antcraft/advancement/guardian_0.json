@@ -1,0 +1,27 @@
+{
+  "parent": "antcraft:root",
+  "display": {
+    "icon": {
+      "id": "minecraft:iron_axe"
+    },
+    "title": {
+      "translate": "advancements.antcraft.guardian_0.title",
+      "fallback": "Captain Down"
+    },
+    "description": {
+      "translate": "advancements.antcraft.guardian_0.description",
+      "fallback": "Defeat the Tunnel Captain guarding floor 0"
+    },
+    "frame": "challenge"
+  },
+  "criteria": {
+    "defeated": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "defeated"
+    ]
+  ]
+}
