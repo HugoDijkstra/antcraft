@@ -4,6 +4,7 @@ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import dev.antcraft.AntCraft;
 import dev.antcraft.Strip;
+import dev.antcraft.StripBounds;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
@@ -34,9 +35,10 @@ public abstract class PortalForcerMixin {
 	)
 	private boolean antcraft$onlyInsideStrip(WorldBorder border, BlockPos pos, Operation<Boolean> original) {
 		boolean ok = original.call(border, pos);
-		if (ok && AntCraft.isStripLevel(this.level)) {
-			return pos.getX() >= Strip.MIN_X + MARGIN && pos.getX() <= Strip.MAX_X - MARGIN
-				&& pos.getZ() >= Strip.MIN_Z + MARGIN && pos.getZ() <= Strip.MAX_Z - MARGIN;
+		StripBounds bounds = ok ? Strip.bounds(this.level) : null;
+		if (bounds != null) {
+			return pos.getX() >= bounds.minX() + MARGIN && pos.getX() <= bounds.maxX() - MARGIN
+				&& pos.getZ() >= bounds.minZ() + MARGIN && pos.getZ() <= bounds.maxZ() - MARGIN;
 		}
 		return ok;
 	}

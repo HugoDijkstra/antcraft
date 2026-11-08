@@ -2,8 +2,8 @@ package dev.antcraft.mixin;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import dev.antcraft.AntCraft;
 import dev.antcraft.Strip;
+import dev.antcraft.StripBounds;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
@@ -32,10 +32,11 @@ public abstract class PortalDestinationMixin {
 		WorldBorder border, double x, double y, double z, Operation<BlockPos> original, ServerLevel currentLevel
 	) {
 		BlockPos pos = original.call(border, x, y, z);
-		// both directions: the overworld and the Nether are 20x300 strips at the same x/z
+		// both directions: the overworld and the Nether are strips at the same x/z; aim into the target's strip
 		ServerLevel target = currentLevel.getServer().getLevel(currentLevel.dimension() == Level.NETHER ? Level.OVERWORLD : Level.NETHER);
-		if (target != null && AntCraft.isStripLevel(target)) {
-			return Strip.clampInside(pos, MARGIN);
+		StripBounds bounds = target != null ? Strip.bounds(target) : null;
+		if (bounds != null) {
+			return bounds.clampInside(pos, MARGIN);
 		}
 		return pos;
 	}

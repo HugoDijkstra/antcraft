@@ -26,13 +26,15 @@ import org.jspecify.annotations.Nullable;
 /**
  * Generates everything below the vanilla world inside the strip: holed bedrock floors, the open
  * halls above each floor, cave layers with depth-themed stone, underground forests, fluids and ores.
- * All of it is a pure function of (seed, x, y, z), so chunks regenerate identically.
+ * All of it is a pure function of (seed, strip bounds, x, y, z), so chunks regenerate identically.
  */
 public final class DeepTerrain {
-	private static final Map<Long, DeepTerrain> BY_SEED = new ConcurrentHashMap<>();
+	private record Key(long seed, StripBounds bounds) {}
 
-	public static DeepTerrain forSeed(long seed) {
-		return BY_SEED.computeIfAbsent(seed, DeepTerrain::new);
+	private static final Map<Key, DeepTerrain> CACHE = new ConcurrentHashMap<>();
+
+	public static DeepTerrain forSeed(long seed, StripBounds bounds) {
+		return CACHE.computeIfAbsent(new Key(seed, bounds), key -> new DeepTerrain(key.seed(), key.bounds()));
 	}
 
 	static final BlockState AIR = Blocks.AIR.defaultBlockState();
@@ -72,6 +74,7 @@ public final class DeepTerrain {
 	};
 
 	private final long seed;
+	private final StripBounds bounds;
 	private final SimplexNoise cheese;
 	private final SimplexNoise cheeseDetail;
 	private final SimplexNoise noodleA;
@@ -85,8 +88,9 @@ public final class DeepTerrain {
 	private final SimplexNoise fluid;
 	private final SimplexNoise mud;
 
-	private DeepTerrain(long seed) {
+	private DeepTerrain(long seed, StripBounds bounds) {
 		this.seed = seed;
+		this.bounds = bounds;
 		RandomSource random = new XoroshiroRandomSource(Strip.mix(seed, 42));
 		this.cheese = new SimplexNoise(random);
 		this.cheeseDetail = new SimplexNoise(random);
@@ -104,6 +108,10 @@ public final class DeepTerrain {
 
 	public long seed() {
 		return this.seed;
+	}
+
+	public StripBounds bounds() {
+		return this.bounds;
 	}
 
 	// ------------------------------------------------------------------ chunk writes
@@ -166,7 +174,7 @@ public final class DeepTerrain {
 		for (int k = 0; k < Strip.FLOOR_COUNT; k++) {
 			// never block the way to a hole
 			if (Strip.floorTop(k) + 1 == Strip.hallBottom(layer)
-				&& Math.abs(x - Strip.holeX(this.seed, k)) <= 2 && Math.abs(z - Strip.holeZ(this.seed, k)) <= 2) {
+				&& Math.abs(x - Strip.holeX(this.seed, k, this.bounds)) <= 2 && Math.abs(z - Strip.holeZ(this.seed, k, this.bounds)) <= 2) {
 				return false;
 			}
 		}
@@ -379,11 +387,11 @@ public final class DeepTerrain {
 	}
 
 	/** Water at the same height right next to this column (so sugar cane can survive). */
-	private static boolean waterNextTo(WorldGenLevel level, int x, int z, int surface) {
+	private boolean waterNextTo(WorldGenLevel level, int x, int z, int surface) {
 		int[][] offsets = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
 		for (int[] o : offsets) {
 			int nx = x + o[0], nz = z + o[1];
-			if (Strip.inside(nx, nz) && level.getFluidState(new BlockPos(nx, surface, nz)).is(net.minecraft.tags.FluidTags.WATER)) return true;
+			if (this.bounds.inside(nx, nz) && level.getFluidState(new BlockPos(nx, surface, nz)).is(net.minecraft.tags.FluidTags.WATER)) return true;
 		}
 		return false;
 	}
@@ -395,8 +403,8 @@ public final class DeepTerrain {
 	public void decorateForests(WorldGenLevel level, ChunkAccess chunk) {
 		ChunkPos pos = chunk.getPos();
 		BlockPos.MutableBlockPos at = new BlockPos.MutableBlockPos();
-		for (int x = Math.max(pos.getMinBlockX(), Strip.MIN_X); x <= Math.min(pos.getMaxBlockX(), Strip.MAX_X); x++) {
-			for (int z = Math.max(pos.getMinBlockZ(), Strip.MIN_Z); z <= Math.min(pos.getMaxBlockZ(), Strip.MAX_Z); z++) {
+		for (int x = Math.max(pos.getMinBlockX(), this.bounds.minX()); x <= Math.min(pos.getMaxBlockX(), this.bounds.maxX()); x++) {
+			for (int z = Math.max(pos.getMinBlockZ(), this.bounds.minZ()); z <= Math.min(pos.getMaxBlockZ(), this.bounds.maxZ()); z++) {
 				for (int layer = 1; layer <= Strip.DEEP_LAYERS; layer++) {
 					int surface = this.surfaceAt(layer, x, z);
 					BlockState plant = this.plantFor(level, layer, x, z, surface);
@@ -451,8 +459,8 @@ public final class DeepTerrain {
 	public void cutHoles(ChunkAccess chunk) {
 		ChunkPos pos = chunk.getPos();
 		for (int k = 0; k < Strip.FLOOR_COUNT; k++) {
-			int hx = Strip.holeX(this.seed, k);
-			int hz = Strip.holeZ(this.seed, k);
+			int hx = Strip.holeX(this.seed, k, this.bounds);
+			int hz = Strip.holeZ(this.seed, k, this.bounds);
 			int floorBase = Strip.floorBase(k);
 			int floorTop = Strip.floorTop(k);
 			int layerBelow = k + 1;
@@ -496,7 +504,7 @@ public final class DeepTerrain {
 				}
 			}
 			// floor 4's hole is sealed until the player brings the Nether Key
-			if (k == Strip.SEALED_FLOOR) {
+			if (k == Strip.SEALED_FLOOR && AntCraftConfig.get().netherKeyGate) {
 				setIfInChunk(chunk, pos, hx, floorTop, hz, ModContent.NETHER_SEAL.defaultBlockState());
 			}
 			// keep the hall right above the hole open
@@ -511,17 +519,17 @@ public final class DeepTerrain {
 	 * Covers the whole 3x3 region decoration may write to, so whichever chunk decorates last cleans
 	 * up after its neighbours too.
 	 */
-	public static void sealAboveFirstHall(WorldGenLevel level, ChunkPos center) {
+	public void sealAboveFirstHall(WorldGenLevel level, ChunkPos center) {
 		int from = Strip.hallBottom(0) + Strip.HALL_HEIGHT;
 		BlockPos.MutableBlockPos at = new BlockPos.MutableBlockPos();
 		// y -55..-53 always solid; y -52..-51 only if it is fluid that could flow into the band
 		for (int cx = center.x() - 1; cx <= center.x() + 1; cx++) {
 			for (int cz = center.z() - 1; cz <= center.z() + 1; cz++) {
 				ChunkPos pos = new ChunkPos(cx, cz);
-				if (!Strip.chunkOverlapsStrip(pos)) continue;
+				if (!this.bounds.chunkOverlaps(pos)) continue;
 				ChunkAccess chunk = level.getChunk(cx, cz);
-				for (int x = Math.max(pos.getMinBlockX(), Strip.MIN_X); x <= Math.min(pos.getMaxBlockX(), Strip.MAX_X); x++) {
-					for (int z = Math.max(pos.getMinBlockZ(), Strip.MIN_Z); z <= Math.min(pos.getMaxBlockZ(), Strip.MAX_Z); z++) {
+				for (int x = Math.max(pos.getMinBlockX(), this.bounds.minX()); x <= Math.min(pos.getMaxBlockX(), this.bounds.maxX()); x++) {
+					for (int z = Math.max(pos.getMinBlockZ(), this.bounds.minZ()); z <= Math.min(pos.getMaxBlockZ(), this.bounds.maxZ()); z++) {
 						for (int y = from; y <= from + 4; y++) {
 							if (!chunk.getBlockState(at.set(x, y, z)).getFluidState().isEmpty()) chunk.setBlockState(at, DEEPSLATE);
 						}
@@ -535,19 +543,20 @@ public final class DeepTerrain {
 	 * Leaves cut off from their logs (by the walls, clipping or a village piece) would decay and drop
 	 * sticks and saplings on the first random tick. Make them persistent instead.
 	 */
-	public static void keepLeaves(WorldGenLevel level, ChunkPos center) {
+	public void keepLeaves(WorldGenLevel level, ChunkPos center) {
 		BlockPos.MutableBlockPos at = new BlockPos.MutableBlockPos();
 		for (int cx = center.x() - 1; cx <= center.x() + 1; cx++) {
 			for (int cz = center.z() - 1; cz <= center.z() + 1; cz++) {
 				ChunkPos pos = new ChunkPos(cx, cz);
-				if (!Strip.chunkOverlapsStrip(pos)) continue;
+				if (!this.bounds.chunkOverlaps(pos)) continue;
 				ChunkAccess chunk = level.getChunk(cx, cz);
+				StripBounds b = this.bounds;
 				for (int layer = 1; layer <= Strip.DEEP_LAYERS; layer++) {
 					int floor = Strip.forestFloor(layer);
-					for (int x = Math.max(pos.getMinBlockX(), Strip.MIN_X); x <= Math.min(pos.getMaxBlockX(), Strip.MAX_X); x++) {
-						for (int z = Math.max(pos.getMinBlockZ(), Strip.MIN_Z); z <= Math.min(pos.getMaxBlockZ(), Strip.MAX_Z); z++) {
+					for (int x = Math.max(pos.getMinBlockX(), b.minX()); x <= Math.min(pos.getMaxBlockX(), b.maxX()); x++) {
+						for (int z = Math.max(pos.getMinBlockZ(), b.minZ()); z <= Math.min(pos.getMaxBlockZ(), b.maxZ()); z++) {
 							// leaves near a wall may have lost their logs when the outside was cut away
-							boolean nearWall = x <= Strip.MIN_X + 5 || x >= Strip.MAX_X - 5 || z <= Strip.MIN_Z + 5 || z >= Strip.MAX_Z - 5;
+							boolean nearWall = x <= b.minX() + 5 || x >= b.maxX() - 5 || z <= b.minZ() + 5 || z >= b.maxZ() - 5;
 							for (int y = floor - 4; y <= floor + Strip.FOREST_HEIGHT + 4; y++) {
 								BlockState state = chunk.getBlockState(at.set(x, y, z));
 								if (!state.hasProperty(LeavesBlock.DISTANCE) || !state.hasProperty(LeavesBlock.PERSISTENT) || state.getValue(LeavesBlock.PERSISTENT)) continue;
@@ -562,9 +571,9 @@ public final class DeepTerrain {
 		}
 	}
 
-	private static void setIfInChunk(ChunkAccess chunk, ChunkPos pos, int x, int y, int z, BlockState state) {
+	private void setIfInChunk(ChunkAccess chunk, ChunkPos pos, int x, int y, int z, BlockState state) {
 		if (x < pos.getMinBlockX() || x > pos.getMaxBlockX() || z < pos.getMinBlockZ() || z > pos.getMaxBlockZ()) return;
-		if (!Strip.inside(x, z)) return;
+		if (!this.bounds.inside(x, z)) return;
 		set(chunk, x - pos.getMinBlockX(), y, z - pos.getMinBlockZ(), state);
 	}
 
@@ -580,18 +589,22 @@ public final class DeepTerrain {
 		return new Ore(stone.defaultBlockState(), deepslate.defaultBlockState(), minLayer, maxLayer, veins, perLayer, size);
 	}
 
-	/** Vein counts are per 16x16 chunk per layer; ores get richer the deeper you go. */
+	/**
+	 * Vein counts are per 16x16 chunk per layer. Each tool tier unlocks one layer deeper (layer 1:
+	 * coal + copper, 2: iron, 3: gold, 4: redstone + lapis, 5: diamond, 6: obsidian + emerald,
+	 * 7: ancient debris) and keeps appearing below; the earlier an ore unlocks, the more common it is.
+	 */
 	private static final List<Ore> ORES = List.of(
-		ore(Blocks.COAL_ORE, Blocks.DEEPSLATE_COAL_ORE, 1, 4, 14, -3, 12),
-		ore(Blocks.IRON_ORE, Blocks.DEEPSLATE_IRON_ORE, 1, 8, 12, 1, 9),
-		ore(Blocks.COPPER_ORE, Blocks.DEEPSLATE_COPPER_ORE, 1, 5, 8, 0, 10),
-		ore(Blocks.GOLD_ORE, Blocks.DEEPSLATE_GOLD_ORE, 1, 8, 4, 1, 8),
-		ore(Blocks.REDSTONE_ORE, Blocks.DEEPSLATE_REDSTONE_ORE, 1, 8, 6, 1, 8),
-		ore(Blocks.LAPIS_ORE, Blocks.DEEPSLATE_LAPIS_ORE, 1, 8, 3, 0, 7),
-		ore(Blocks.DIAMOND_ORE, Blocks.DEEPSLATE_DIAMOND_ORE, 1, 8, 2, 1, 6),
-		ore(Blocks.EMERALD_ORE, Blocks.DEEPSLATE_EMERALD_ORE, 4, 8, 2, 0, 3),
-		ore(Blocks.ANCIENT_DEBRIS, Blocks.ANCIENT_DEBRIS, 6, 8, 1, 1, 2),
-		ore(Blocks.OBSIDIAN, Blocks.OBSIDIAN, 3, 8, 1, 0, 6)
+		ore(Blocks.COAL_ORE, Blocks.DEEPSLATE_COAL_ORE, 1, 8, 14, -1, 12),
+		ore(Blocks.COPPER_ORE, Blocks.DEEPSLATE_COPPER_ORE, 1, 8, 10, 0, 10),
+		ore(Blocks.IRON_ORE, Blocks.DEEPSLATE_IRON_ORE, 2, 8, 9, 0, 9),
+		ore(Blocks.GOLD_ORE, Blocks.DEEPSLATE_GOLD_ORE, 3, 8, 6, 0, 8),
+		ore(Blocks.REDSTONE_ORE, Blocks.DEEPSLATE_REDSTONE_ORE, 4, 8, 5, 0, 8),
+		ore(Blocks.LAPIS_ORE, Blocks.DEEPSLATE_LAPIS_ORE, 4, 8, 4, 0, 7),
+		ore(Blocks.DIAMOND_ORE, Blocks.DEEPSLATE_DIAMOND_ORE, 5, 8, 3, 0, 6),
+		ore(Blocks.OBSIDIAN, Blocks.OBSIDIAN, 6, 8, 2, 0, 6),
+		ore(Blocks.EMERALD_ORE, Blocks.DEEPSLATE_EMERALD_ORE, 6, 8, 2, 0, 3),
+		ore(Blocks.ANCIENT_DEBRIS, Blocks.ANCIENT_DEBRIS, 7, 8, 1, 0, 2)
 	);
 
 	private static boolean isLayerStone(BlockState state) {
@@ -603,8 +616,8 @@ public final class DeepTerrain {
 
 	public void placeOres(ChunkAccess chunk) {
 		ChunkPos pos = chunk.getPos();
-		int minX = Math.max(pos.getMinBlockX(), Strip.MIN_X), maxX = Math.min(pos.getMaxBlockX(), Strip.MAX_X);
-		int minZ = Math.max(pos.getMinBlockZ(), Strip.MIN_Z), maxZ = Math.min(pos.getMaxBlockZ(), Strip.MAX_Z);
+		int minX = Math.max(pos.getMinBlockX(), this.bounds.minX()), maxX = Math.min(pos.getMaxBlockX(), this.bounds.maxX());
+		int minZ = Math.max(pos.getMinBlockZ(), this.bounds.minZ()), maxZ = Math.min(pos.getMaxBlockZ(), this.bounds.maxZ());
 		if (minX > maxX || minZ > maxZ) return;
 		double areaScale = (maxX - minX + 1) * (maxZ - minZ + 1) / 256.0;
 		RandomSource random = new XoroshiroRandomSource(Strip.mix(this.seed, 77), Strip.mix(pos.x(), pos.z() * 31L + 5));

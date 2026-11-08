@@ -91,8 +91,9 @@ public final class UndergroundForest {
 
 	public static void placeTrees(WorldGenLevel level, ChunkGenerator generator, ChunkAccess chunk, DeepTerrain terrain, List<BoundingBox> deepPieces) {
 		ChunkPos pos = chunk.getPos();
-		int minX = Math.max(pos.getMinBlockX(), Strip.MIN_X), maxX = Math.min(pos.getMaxBlockX(), Strip.MAX_X);
-		int minZ = Math.max(pos.getMinBlockZ(), Strip.MIN_Z), maxZ = Math.min(pos.getMaxBlockZ(), Strip.MAX_Z);
+		StripBounds bounds = terrain.bounds();
+		int minX = Math.max(pos.getMinBlockX(), bounds.minX()), maxX = Math.min(pos.getMaxBlockX(), bounds.maxX());
+		int minZ = Math.max(pos.getMinBlockZ(), bounds.minZ()), maxZ = Math.min(pos.getMaxBlockZ(), bounds.maxZ());
 		if (minX > maxX || minZ > maxZ) return;
 		double areaScale = (maxX - minX + 1) * (maxZ - minZ + 1) / 256.0;
 		RandomSource random = new XoroshiroRandomSource(Strip.mix(terrain.seed(), 5000), Strip.mix(pos.x(), pos.z()));
@@ -107,8 +108,8 @@ public final class UndergroundForest {
 			int attempts = (int) Math.ceil(treeAttempts(layer) * areaScale);
 			for (int a = 0; a < attempts; a++) {
 				// keep trunks a block away from the walls so canopies mostly stay inside
-				int x = Math.clamp(minX + random.nextInt(maxX - minX + 1), Strip.MIN_X + 1, Strip.MAX_X - 1);
-				int z = Math.clamp(minZ + random.nextInt(maxZ - minZ + 1), Strip.MIN_Z + 1, Strip.MAX_Z - 1);
+				int x = Math.clamp(minX + random.nextInt(maxX - minX + 1), bounds.minX() + 1, bounds.maxX() - 1);
+				int z = Math.clamp(minZ + random.nextInt(maxZ - minZ + 1), bounds.minZ() + 1, bounds.maxZ() - 1);
 				ResourceKey<Feature> key = pick(choices, random);
 				if (inVillage(deepPieces, layer, x, z)) continue;
 				BlockPos ground = findGround(level, terrain, layer, x, z);
@@ -130,8 +131,9 @@ public final class UndergroundForest {
 		WorldGenLevel level, ChunkGenerator generator, DeepTerrain terrain, List<BoundingBox> deepPieces, RandomSource random, int minX, int maxX, int minZ, int maxZ
 	) {
 		if (random.nextFloat() > 0.35F) return;
-		int x = Math.clamp(minX + random.nextInt(maxX - minX + 1), Strip.MIN_X + 3, Strip.MAX_X - 3);
-		int z = Math.clamp(minZ + random.nextInt(maxZ - minZ + 1), Strip.MIN_Z + 3, Strip.MAX_Z - 3);
+		StripBounds bounds = terrain.bounds();
+		int x = Math.clamp(minX + random.nextInt(maxX - minX + 1), bounds.minX() + 3, bounds.maxX() - 3);
+		int z = Math.clamp(minZ + random.nextInt(maxZ - minZ + 1), bounds.minZ() + 3, bounds.maxZ() - 3);
 		if (inVillage(deepPieces, Strip.DESERT_LAYER, x, z)) return;
 		BlockPos ground = findGround(level, terrain, Strip.DESERT_LAYER, x, z);
 		if (ground == null) return;
@@ -153,8 +155,9 @@ public final class UndergroundForest {
 	/** Spawns a herd or two of farm animals in each forest. Called once per chunk at generation. */
 	public static void spawnAnimals(WorldGenRegion region, DeepTerrain terrain) {
 		ChunkPos pos = region.getCenter();
-		int minX = Math.max(pos.getMinBlockX(), Strip.MIN_X), maxX = Math.min(pos.getMaxBlockX(), Strip.MAX_X);
-		int minZ = Math.max(pos.getMinBlockZ(), Strip.MIN_Z), maxZ = Math.min(pos.getMaxBlockZ(), Strip.MAX_Z);
+		StripBounds bounds = terrain.bounds();
+		int minX = Math.max(pos.getMinBlockX(), bounds.minX()), maxX = Math.min(pos.getMaxBlockX(), bounds.maxX());
+		int minZ = Math.max(pos.getMinBlockZ(), bounds.minZ()), maxZ = Math.min(pos.getMaxBlockZ(), bounds.maxZ());
 		if (minX > maxX || minZ > maxZ) return;
 		RandomSource random = new XoroshiroRandomSource(Strip.mix(terrain.seed(), 6000), Strip.mix(pos.x(), pos.z()));
 

@@ -36,31 +36,44 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
 import org.jspecify.annotations.Nullable;
 
 /**
- * The Nether as a 20x300 strip (same x/z as the overworld strip; portals map 1:1). Vanilla Nether
+ * The Nether as a strip with the same footprint as the overworld strip (portals map 1:1). Vanilla Nether
  * terrain inside, invisible barrier walls, void outside, a guaranteed fortress and the Nether Key
  * shrine.
  */
-public final class NetherStripChunkGenerator extends ChunkGenerator implements WrappedNoiseGenerator {
+public final class NetherStripChunkGenerator extends ChunkGenerator implements WrappedNoiseGenerator, StripGenerator {
 	public static final MapCodec<NetherStripChunkGenerator> CODEC = RecordCodecBuilder.mapCodec(
-		i -> i.group(NoiseBasedChunkGenerator.CODEC.codec().fieldOf("base").forGetter(g -> g.base)).apply(i, NetherStripChunkGenerator::new)
+		i -> i.group(
+				NoiseBasedChunkGenerator.CODEC.codec().fieldOf("base").forGetter(g -> g.base),
+				StripBounds.SIZE_CODEC.forGetter(g -> g.bounds)
+			)
+			.apply(i, NetherStripChunkGenerator::new)
 	);
 
 	public static final ResourceKey<Structure> STRIP_FORTRESS = ResourceKey.create(
 		Registries.STRUCTURE, Identifier.fromNamespaceAndPath(AntCraft.MOD_ID, "strip_fortress")
 	);
-	/** The guaranteed fortress starts here, mid-strip. */
-	public static final ChunkPos FORTRESS_CHUNK = new ChunkPos(0, 12);
-
 	private final NoiseBasedChunkGenerator base;
+	private final StripBounds bounds;
 
-	public NetherStripChunkGenerator(NoiseBasedChunkGenerator base) {
+	public NetherStripChunkGenerator(NoiseBasedChunkGenerator base, StripBounds bounds) {
 		super(base.getBiomeSource());
 		this.base = base;
+		this.bounds = bounds;
 	}
 
 	@Override
 	public NoiseBasedChunkGenerator base() {
 		return this.base;
+	}
+
+	@Override
+	public StripBounds bounds() {
+		return this.bounds;
+	}
+
+	/** The guaranteed fortress starts here: in the middle of the strip's width, 2/3 along it (chunk 0, 12 for 20x300). */
+	public static ChunkPos fortressChunk(StripBounds bounds) {
+		return new ChunkPos(bounds.centerX() >> 4, bounds.scaledZ(200) >> 4);
 	}
 
 	@Override
@@ -70,7 +83,7 @@ public final class NetherStripChunkGenerator extends ChunkGenerator implements W
 
 	@Override
 	public CompletableFuture<ChunkAccess> createBiomes(RandomState randomState, Blender blender, StructureManager structureManager, ChunkAccess chunk) {
-		if (!Strip.chunkTouchesStrip(chunk.getPos())) return CompletableFuture.completedFuture(chunk);
+		if (!this.bounds.chunkTouches(chunk.getPos())) return CompletableFuture.completedFuture(chunk);
 		return this.base.createBiomes(randomState, blender, structureManager, chunk);
 	}
 
@@ -85,17 +98,17 @@ public final class NetherStripChunkGenerator extends ChunkGenerator implements W
 		Set<Holder<Biome>> possibleBiomes
 	) {
 		ChunkPos pos = chunk.getPos();
-		if (!Strip.chunkTouchesStrip(pos)) return CompletableFuture.completedFuture(chunk);
-		CompletableFuture<ChunkAccess> vanilla = Strip.chunkOverlapsStrip(pos)
+		if (!this.bounds.chunkTouches(pos)) return CompletableFuture.completedFuture(chunk);
+		CompletableFuture<ChunkAccess> vanilla = this.bounds.chunkOverlaps(pos)
 			? this.base.buildTerrain(chunk, blender, randomState, structureManager, biomeManager, carverBiomeRegion, possibleBiomes)
 			: CompletableFuture.completedFuture(chunk);
 		return vanilla.thenApply(c -> {
-			shapeChunk(c);
+			this.shapeChunk(c);
 			return c;
 		});
 	}
 
-	private static void shapeChunk(ChunkAccess chunk) {
+	private void shapeChunk(ChunkAccess chunk) {
 		ChunkPos pos = chunk.getPos();
 		LevelChunkSection[] sections = chunk.getSections();
 		for (LevelChunkSection section : sections) section.acquire();
@@ -104,8 +117,8 @@ public final class NetherStripChunkGenerator extends ChunkGenerator implements W
 			for (int lx = 0; lx < 16; lx++) {
 				for (int lz = 0; lz < 16; lz++) {
 					int x = pos.getMinBlockX() + lx, z = pos.getMinBlockZ() + lz;
-					if (Strip.inside(x, z)) continue;
-					boolean wall = Strip.isWall(x, z);
+					if (this.bounds.inside(x, z)) continue;
+					boolean wall = this.bounds.isWall(x, z);
 					for (int i = 0; i < sections.length; i++) {
 						LevelChunkSection section = sections[i];
 						if (!wall && section.hasOnlyAir()) continue;
@@ -125,8 +138,8 @@ public final class NetherStripChunkGenerator extends ChunkGenerator implements W
 				for (int lx = 0; lx < 16; lx++) {
 					for (int lz = 0; lz < 16; lz++) {
 						int x = pos.getMinBlockX() + lx, z = pos.getMinBlockZ() + lz;
-						if (Strip.inside(x, z)) continue;
-						if (Strip.isWall(x, z)) {
+						if (this.bounds.inside(x, z)) continue;
+						if (this.bounds.isWall(x, z)) {
 							heightmap.update(lx, maxY, lz, DeepTerrain.BARRIER);
 						} else {
 							int first = heightmap.getFirstAvailable(lx, lz);
@@ -141,7 +154,7 @@ public final class NetherStripChunkGenerator extends ChunkGenerator implements W
 	}
 
 	/** After decoration: clear spill-over outside the strip and restore wall blocks in the 3x3 region. */
-	private static void clipRegion(WorldGenLevel level, ChunkPos center) {
+	private void clipRegion(WorldGenLevel level, ChunkPos center) {
 		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
 		for (int cx = center.x() - 1; cx <= center.x() + 1; cx++) {
 			for (int cz = center.z() - 1; cz <= center.z() + 1; cz++) {
@@ -152,8 +165,8 @@ public final class NetherStripChunkGenerator extends ChunkGenerator implements W
 				for (int lx = 0; lx < 16; lx++) {
 					for (int lz = 0; lz < 16; lz++) {
 						int x = chunkPos.getMinBlockX() + lx, z = chunkPos.getMinBlockZ() + lz;
-						if (Strip.inside(x, z)) continue;
-						boolean wall = Strip.isWall(x, z);
+						if (this.bounds.inside(x, z)) continue;
+						boolean wall = this.bounds.isWall(x, z);
 						BlockState wanted = wall ? DeepTerrain.BARRIER : DeepTerrain.AIR;
 						for (int i = 0; i < sections.length; i++) {
 							LevelChunkSection section = sections[i];
@@ -175,10 +188,10 @@ public final class NetherStripChunkGenerator extends ChunkGenerator implements W
 	@Override
 	public void applyBiomeDecoration(WorldGenLevel level, ChunkAccess chunk, StructureManager structureManager) {
 		ChunkPos pos = chunk.getPos();
-		if (!Strip.chunkOverlapsStrip(pos)) return;
+		if (!this.bounds.chunkOverlaps(pos)) return;
 		super.applyBiomeDecoration(level, chunk, structureManager);
-		KeyShrine.placeIfHere(level, chunk);
-		clipRegion(level, pos);
+		KeyShrine.rebuild(level, pos, this.bounds); // after this chunk's fortress pieces and features
+		this.clipRegion(level, pos);
 	}
 
 	@Override
@@ -190,9 +203,9 @@ public final class NetherStripChunkGenerator extends ChunkGenerator implements W
 		StructureTemplateManager structureTemplateManager,
 		ResourceKey<Level> level
 	) {
-		if (!Strip.chunkOverlapsStrip(centerChunk.getPos())) return;
+		if (!this.bounds.chunkOverlaps(centerChunk.getPos())) return;
 		super.createStructures(registryAccess, state, structureManager, centerChunk, structureTemplateManager, level);
-		if (!centerChunk.getPos().equals(FORTRESS_CHUNK)) return;
+		if (!centerChunk.getPos().equals(fortressChunk(this.bounds))) return;
 
 		Holder<Structure> holder = registryAccess.lookupOrThrow(Registries.STRUCTURE).get(STRIP_FORTRESS).orElse(null);
 		if (holder == null) {
@@ -234,7 +247,7 @@ public final class NetherStripChunkGenerator extends ChunkGenerator implements W
 
 	@Override
 	public void spawnOriginalMobs(WorldGenRegion region) {
-		if (Strip.chunkOverlapsStrip(region.getCenter())) this.base.spawnOriginalMobs(region);
+		if (this.bounds.chunkOverlaps(region.getCenter())) this.base.spawnOriginalMobs(region);
 	}
 
 	@Override

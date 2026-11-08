@@ -1,10 +1,15 @@
 package dev.antcraft;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.chunk.ChunkGenerator;
+import org.jspecify.annotations.Nullable;
 
 /**
- * All the fixed geometry of the AntCraft world.
+ * All the geometry of the AntCraft world. The layer heights are fixed (the dimension type sets
+ * the world height); the x/z footprint is per world and per dimension, see {@link StripBounds}.
  *
  * <pre>
  *  y  335  ─ top of the world (barrier walls go all the way up)
@@ -22,16 +27,19 @@ import net.minecraft.world.level.ChunkPos;
 public final class Strip {
 	private Strip() {}
 
-	/** Playable area, inclusive. */
-	public static final int MIN_X = 0, MAX_X = 19;
-	public static final int MIN_Z = 0, MAX_Z = 299;
-	public static final int CENTER_X = 10, CENTER_Z = 150;
+	/**
+	 * The x/z footprint of a strip dimension, or null if the level is not a strip. Each strip
+	 * generator carries its own bounds (overworld and Nether share the world's width and length).
+	 */
+	public static @Nullable StripBounds bounds(Level level) {
+		return level instanceof ServerLevel server ? bounds(server.getChunkSource().getGenerator()) : null;
+	}
 
-	/** Barrier wall coordinates (one block outside the playable area). */
-	public static final int WALL_MIN_X = MIN_X - 1, WALL_MAX_X = MAX_X + 1;
-	public static final int WALL_MIN_Z = MIN_Z - 1, WALL_MAX_Z = MAX_Z + 1;
+	public static @Nullable StripBounds bounds(ChunkGenerator generator) {
+		return generator instanceof StripGenerator strip ? strip.bounds() : null;
+	}
 
-	/** World height, must match data/minecraft/dimension_type/overworld.json. */
+	/** World height, must match data/antcraft/dimension_type/strip_overworld.json. */
 	public static final int WORLD_MIN_Y = -2032;
 	public static final int WORLD_MAX_Y = 335; // inclusive; vanilla terrain needs up to 320
 
@@ -67,8 +75,6 @@ public final class Strip {
 	/** The underground desert. */
 	public static final int DESERT_LAYER = 6;
 	public static final int CITY_START_Y = -1280; // keep in sync with deep_ancient_city.json
-	/** The city starts in this chunk, in the middle of the strip. */
-	public static final ChunkPos CITY_CHUNK = new ChunkPos(0, CENTER_Z >> 4);
 	/** Vertical extent the city may occupy (for clipping its parts outside the strip). */
 	public static final int CITY_MIN_Y = CITY_START_Y - 40, CITY_MAX_Y = CITY_START_Y + 60;
 
@@ -119,36 +125,17 @@ public final class Strip {
 		return -1;
 	}
 
-	public static boolean inside(int x, int z) {
-		return x >= MIN_X && x <= MAX_X && z >= MIN_Z && z <= MAX_Z;
+	/** The ancient city starts in this chunk, in the middle of the strip. */
+	public static ChunkPos cityChunk(StripBounds bounds) {
+		return new ChunkPos(bounds.centerX() >> 4, bounds.centerZ() >> 4);
 	}
 
-	/** True for the barrier ring around the strip. */
-	public static boolean isWall(int x, int z) {
-		boolean inWallX = x >= WALL_MIN_X && x <= WALL_MAX_X;
-		boolean inWallZ = z >= WALL_MIN_Z && z <= WALL_MAX_Z;
-		return inWallX && inWallZ && !inside(x, z);
-	}
-
-	public static boolean chunkOverlapsStrip(ChunkPos pos) {
-		return pos.getMaxBlockX() >= MIN_X && pos.getMinBlockX() <= MAX_X && pos.getMaxBlockZ() >= MIN_Z && pos.getMinBlockZ() <= MAX_Z;
-	}
-
-	/** True if the chunk has any strip or wall column. */
-	public static boolean chunkTouchesStrip(ChunkPos pos) {
-		return pos.getMaxBlockX() >= WALL_MIN_X && pos.getMinBlockX() <= WALL_MAX_X && pos.getMaxBlockZ() >= WALL_MIN_Z && pos.getMinBlockZ() <= WALL_MAX_Z;
-	}
-
-	/** Clamp a position into the strip, keeping {@code margin} blocks away from the walls. */
-	public static BlockPos clampInside(BlockPos pos, int margin) {
-		int x = Math.clamp(pos.getX(), MIN_X + margin, MAX_X - margin);
-		int z = Math.clamp(pos.getZ(), MIN_Z + margin, MAX_Z - margin);
-		return new BlockPos(x, pos.getY(), z);
-	}
-
-	/** How many times longer pickaxe blocks take to mine in a deep layer (1 = vanilla). */
-	public static float hardness(int layer) {
-		return layer <= 0 ? 1.0F : 1.0F + 0.5F * layer;
+	/**
+	 * How many times longer pickaxe blocks take to mine in a deep layer (1 = vanilla). The client
+	 * uses the server's value, see {@link MiningHardness}.
+	 */
+	public static float hardness(int layer, boolean clientSide) {
+		return MiningHardness.factor(layer, clientSide);
 	}
 
 	// ---------------------------------------------------------------- villages
@@ -160,10 +147,39 @@ public final class Strip {
 		return VILLAGE_TYPES[layer];
 	}
 
-	/** Chunk where the village of a deep layer starts: alternating sides, a different z per layer. */
-	public static ChunkPos villageChunk(long seed, int layer) {
-		int base = (int) Math.floorMod(mix(seed, 7000), 17L);
-		return new ChunkPos(layer % 2, 1 + Math.floorMod(base + layer * 2, 17));
+	/**
+	 * Chunk where the village of a deep layer starts: alternating sides, a different chunk row per
+	 * layer, never in the first or last chunk row (the village is moved to the strip's centre x later).
+	 *
+	 * <p>Layer L sits {@code (L - 1) * step} rows after a seeded first row (wrapping around). The step
+	 * grows with the strip length so long strips spread their villages out, and it is coprime with
+	 * the number of rows, so all eight layers get different rows whenever there are at least eight
+	 * rows (a strip of the minimum length 150 has exactly eight). Two layers with the same village
+	 * type in the same chunk would otherwise overwrite each other's structure start.
+	 */
+	public static ChunkPos villageChunk(long seed, int layer, StripBounds bounds) {
+		int firstRow = bounds.minZ() >> 4, lastRow = bounds.maxZ() >> 4;
+		int rows = Math.max(1, lastRow - firstRow - 1); // 17 for the default 300-long strip
+		int base = (int) Math.floorMod(mix(seed, 7000), (long) rows);
+		int chunkX = layer % 2 == 0 ? bounds.minX() >> 4 : bounds.maxX() >> 4;
+		return new ChunkPos(chunkX, firstRow + 1 + Math.floorMod(base + layer * villageStep(rows), rows));
+	}
+
+	/** Row step between consecutive layers' villages: about rows / 8 (2 for 17 rows), coprime with rows. */
+	static int villageStep(int rows) {
+		if (rows <= 2) return 1;
+		int step = Math.max(2, rows / DEEP_LAYERS);
+		while (gcd(step, rows) != 1) step++;
+		return step;
+	}
+
+	private static int gcd(int a, int b) {
+		while (b != 0) {
+			int t = a % b;
+			a = b;
+			b = t;
+		}
+		return a;
 	}
 
 	// ---------------------------------------------------------------- seeded positions
@@ -176,26 +192,27 @@ public final class Strip {
 		return z ^ (z >>> 31);
 	}
 
-	/** Hole of floor k: x in [2, 17], z in [2, 297]. */
-	public static int holeX(long seed, int k) {
-		return MIN_X + 2 + (int) Math.floorMod(mix(seed, 1000 + k), (long) (MAX_X - MIN_X - 3));
+	/** Hole of floor k: at least 2 blocks from the walls (x in [2, 17], z in [2, 297] for 20 x 300). */
+	public static int holeX(long seed, int k, StripBounds bounds) {
+		return bounds.minX() + 2 + (int) Math.floorMod(mix(seed, 1000 + k), (long) (bounds.width() - 4));
 	}
 
-	public static int holeZ(long seed, int k) {
-		int z = MIN_Z + 2 + (int) Math.floorMod(mix(seed, 2000 + k), (long) (MAX_Z - MIN_Z - 3));
+	public static int holeZ(long seed, int k, StripBounds bounds) {
+		int range = bounds.length() - 4;
+		int z = bounds.minZ() + 2 + (int) Math.floorMod(mix(seed, 2000 + k), (long) range);
 		if (k == FLOOR_COUNT - 1) {
 			// the last hole must not come down on top of the End portal room
-			int room = portalRoomZ(seed);
+			int room = portalRoomZ(seed, bounds);
 			while (Math.abs(z - room) <= PortalRoom.HALF_LENGTH + 3) {
-				z = MIN_Z + 2 + Math.floorMod(z - MIN_Z - 2 + 2 * PortalRoom.HALF_LENGTH + 7, MAX_Z - MIN_Z - 3);
+				z = bounds.minZ() + 2 + Math.floorMod(z - bounds.minZ() - 2 + 2 * PortalRoom.HALF_LENGTH + 7, range);
 			}
 		}
 		return z;
 	}
 
-	/** Centre Z of the End portal room in the bottom layer. */
-	public static int portalRoomZ(long seed) {
-		return 30 + (int) Math.floorMod(mix(seed, 3000), 241L);
+	/** Centre Z of the End portal room in the bottom layer: at least 30 blocks from either end. */
+	public static int portalRoomZ(long seed, StripBounds bounds) {
+		return bounds.minZ() + 30 + (int) Math.floorMod(mix(seed, 3000), (long) (bounds.length() - 59));
 	}
 
 	public static int portalRoomFloorY() {
@@ -203,7 +220,7 @@ public final class Strip {
 	}
 
 	/** Where eyes of ender should fly: the middle of the portal. */
-	public static BlockPos portalTarget(long seed) {
-		return new BlockPos(PortalRoom.PORTAL_X, portalRoomFloorY() + 2, portalRoomZ(seed));
+	public static BlockPos portalTarget(long seed, StripBounds bounds) {
+		return new BlockPos(PortalRoom.portalX(bounds), portalRoomFloorY() + 2, portalRoomZ(seed, bounds));
 	}
 }

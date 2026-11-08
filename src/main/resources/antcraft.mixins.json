@@ -5,6 +5,7 @@
 	"mixins": [
 		"ChunkMapMixin",
 		"DeepMiningMixin",
+		"DeepOreMixin",
 		"EnderEyeMixin",
 		"GravityProcessorMixin",
 		"PortalDestinationMixin",

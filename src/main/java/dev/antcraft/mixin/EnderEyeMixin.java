@@ -2,8 +2,8 @@ package dev.antcraft.mixin;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import dev.antcraft.AntCraft;
 import dev.antcraft.Strip;
+import dev.antcraft.StripBounds;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.TagKey;
@@ -26,8 +26,9 @@ public abstract class EnderEyeMixin {
 	private BlockPos antcraft$pointToPortalRoom(
 		ServerLevel level, TagKey<Structure> tag, BlockPos origin, int radius, boolean createReference, Operation<BlockPos> original
 	) {
-		if (level.dimension() == Level.OVERWORLD && AntCraft.isStripLevel(level)) {
-			return Strip.portalTarget(level.getSeed());
+		StripBounds bounds = level.dimension() == Level.OVERWORLD ? Strip.bounds(level) : null;
+		if (bounds != null) {
+			return Strip.portalTarget(level.getSeed(), bounds);
 		}
 		return original.call(level, tag, origin, radius, createReference);
 	}

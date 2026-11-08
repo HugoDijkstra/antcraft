@@ -26,11 +26,8 @@ import net.minecraft.world.level.storage.loot.BuiltInLootTables;
 public final class PortalRoom {
 	private PortalRoom() {}
 
-	/** Centre column of the 3x3 portal. */
-	public static final int PORTAL_X = 9;
-
-	/** Room shell, inclusive. */
-	static final int MIN_X = 1, MAX_X = 18;
+	/** Room shell width (x), inclusive of its walls; the narrowest strip is just as wide. */
+	static final int WIDTH = 18;
 	public static final int HALF_LENGTH = 9; // z from cz-9 to cz+8
 	public static final int HEIGHT = 9; // floor y .. floor y + 9 (ceiling)
 
@@ -42,39 +39,60 @@ public final class PortalRoom {
 		return Blocks.STONE_BRICKS.defaultBlockState();
 	}
 
+	/**
+	 * Centre column of the 3x3 portal: the strip's middle column, the western of the two for even
+	 * widths (x 9 in the default 20-wide strip, also x 9 for x 0..18).
+	 */
+	public static int portalX(StripBounds bounds) {
+		return bounds.minX() + (bounds.width() - 1) / 2;
+	}
+
+	/**
+	 * Room shell x range, inclusive, centred in the strip; odd widths leave the extra column on the
+	 * east side (x 1..18 in the default strip, x 0..17 for x 0..18).
+	 */
+	static int minX(StripBounds bounds) {
+		return bounds.minX() + (bounds.width() - WIDTH) / 2;
+	}
+
+	static int maxX(StripBounds bounds) {
+		return minX(bounds) + WIDTH - 1;
+	}
+
 	/** Positions of block-entity blocks, relative to the seed. */
-	static BlockPos spawnerPos(long seed) {
-		return new BlockPos(PORTAL_X, Strip.portalRoomFloorY() + 1, Strip.portalRoomZ(seed) + 5);
+	static BlockPos spawnerPos(long seed, StripBounds bounds) {
+		return new BlockPos(portalX(bounds), Strip.portalRoomFloorY() + 1, Strip.portalRoomZ(seed, bounds) + 5);
 	}
 
-	static BlockPos chestA(long seed) {
-		return new BlockPos(MIN_X + 1, Strip.portalRoomFloorY() + 1, Strip.portalRoomZ(seed) - HALF_LENGTH + 1);
+	static BlockPos chestA(long seed, StripBounds bounds) {
+		return new BlockPos(minX(bounds) + 1, Strip.portalRoomFloorY() + 1, Strip.portalRoomZ(seed, bounds) - HALF_LENGTH + 1);
 	}
 
-	static BlockPos chestB(long seed) {
-		return new BlockPos(MAX_X - 1, Strip.portalRoomFloorY() + 1, Strip.portalRoomZ(seed) + HALF_LENGTH - 2);
+	static BlockPos chestB(long seed, StripBounds bounds) {
+		return new BlockPos(maxX(bounds) - 1, Strip.portalRoomFloorY() + 1, Strip.portalRoomZ(seed, bounds) + HALF_LENGTH - 2);
 	}
 
 	/** Writes the room's blocks into a chunk during terrain generation. */
-	public static void build(ChunkAccess chunk, long seed) {
+	public static void build(ChunkAccess chunk, long seed, StripBounds bounds) {
 		ChunkPos pos = chunk.getPos();
-		int cz = Strip.portalRoomZ(seed);
+		int roomMinX = minX(bounds), roomMaxX = maxX(bounds), portalX = portalX(bounds);
+		int cz = Strip.portalRoomZ(seed, bounds);
 		int minZ = cz - HALF_LENGTH, maxZ = cz + HALF_LENGTH - 1;
 		int floorY = Strip.portalRoomFloorY();
 		int ceilY = floorY + HEIGHT;
-		if (pos.getMaxBlockZ() < minZ || pos.getMinBlockZ() > maxZ || pos.getMaxBlockX() < MIN_X || pos.getMinBlockX() > MAX_X) return;
+		if (pos.getMaxBlockZ() < minZ || pos.getMinBlockZ() > maxZ || pos.getMaxBlockX() < roomMinX || pos.getMinBlockX() > roomMaxX) return;
 
 		// Same random sequence for every chunk, so the room is consistent across chunk borders.
 		RandomSource random = new XoroshiroRandomSource(Strip.mix(seed, 4000));
 		boolean[] eyes = new boolean[12];
 		for (int i = 0; i < eyes.length; i++) eyes[i] = random.nextFloat() > 0.9F;
 
-		for (int x = MIN_X; x <= MAX_X; x++) {
+		for (int x = roomMinX; x <= roomMaxX; x++) {
 			for (int z = minZ; z <= maxZ; z++) {
 				for (int y = floorY; y <= ceilY; y++) {
 					BlockState wallState = wall(random); // always draw, keeps the sequence chunk-independent
-					boolean shell = x == MIN_X || x == MAX_X || z == minZ || z == maxZ || y == floorY || y == ceilY;
-					boolean doorway = (z == minZ || z == maxZ) && x >= PORTAL_X - 1 && x <= PORTAL_X + 2 && y >= floorY + 1 && y <= floorY + 3;
+					boolean shell = x == roomMinX || x == roomMaxX || z == minZ || z == maxZ || y == floorY || y == ceilY;
+					boolean doorway = (z == minZ || z == maxZ) && x >= portalX - 1 && x <= portalX + 2 && y >= floorY + 1 && y <= floorY + 3;
 					put(chunk, pos, x, y, z, shell && !doorway ? wallState : DeepTerrain.AIR);
 				}
 			}
@@ -82,16 +100,16 @@ public final class PortalRoom {
 
 		// raised platform with a lava pool under the portal
 		BlockState bricks = Blocks.STONE_BRICKS.defaultBlockState();
-		for (int x = PORTAL_X - 3; x <= PORTAL_X + 3; x++) {
+		for (int x = portalX - 3; x <= portalX + 3; x++) {
 			for (int z = cz - 3; z <= cz + 3; z++) {
-				boolean inner = Math.abs(x - PORTAL_X) <= 1 && Math.abs(z - cz) <= 1;
+				boolean inner = Math.abs(x - portalX) <= 1 && Math.abs(z - cz) <= 1;
 				put(chunk, pos, x, floorY + 1, z, inner ? DeepTerrain.LAVA : bricks);
 			}
 		}
 		// stairs up onto the platform on both long sides
 		BlockState stairsN = Blocks.STONE_BRICK_STAIRS.defaultBlockState().setValue(net.minecraft.world.level.block.StairBlock.FACING, Direction.SOUTH);
 		BlockState stairsS = Blocks.STONE_BRICK_STAIRS.defaultBlockState().setValue(net.minecraft.world.level.block.StairBlock.FACING, Direction.NORTH);
-		for (int x = PORTAL_X - 1; x <= PORTAL_X + 1; x++) {
+		for (int x = portalX - 1; x <= portalX + 1; x++) {
 			put(chunk, pos, x, floorY + 1, cz - 4, stairsN);
 			put(chunk, pos, x, floorY + 1, cz + 4, stairsS);
 		}
@@ -100,19 +118,19 @@ public final class PortalRoom {
 		int fy = floorY + 2;
 		BlockState frame = Blocks.END_PORTAL_FRAME.defaultBlockState();
 		int i = 0;
-		for (int x = PORTAL_X - 1; x <= PORTAL_X + 1; x++) {
+		for (int x = portalX - 1; x <= portalX + 1; x++) {
 			put(chunk, pos, x, fy, cz - 2, frame.setValue(EndPortalFrameBlock.FACING, Direction.SOUTH).setValue(EndPortalFrameBlock.HAS_EYE, eyes[i++]));
 			put(chunk, pos, x, fy, cz + 2, frame.setValue(EndPortalFrameBlock.FACING, Direction.NORTH).setValue(EndPortalFrameBlock.HAS_EYE, eyes[i++]));
 		}
 		for (int z = cz - 1; z <= cz + 1; z++) {
-			put(chunk, pos, PORTAL_X - 2, fy, z, frame.setValue(EndPortalFrameBlock.FACING, Direction.EAST).setValue(EndPortalFrameBlock.HAS_EYE, eyes[i++]));
-			put(chunk, pos, PORTAL_X + 2, fy, z, frame.setValue(EndPortalFrameBlock.FACING, Direction.WEST).setValue(EndPortalFrameBlock.HAS_EYE, eyes[i++]));
+			put(chunk, pos, portalX - 2, fy, z, frame.setValue(EndPortalFrameBlock.FACING, Direction.EAST).setValue(EndPortalFrameBlock.HAS_EYE, eyes[i++]));
+			put(chunk, pos, portalX + 2, fy, z, frame.setValue(EndPortalFrameBlock.FACING, Direction.WEST).setValue(EndPortalFrameBlock.HAS_EYE, eyes[i++]));
 		}
 
 		// a few lanterns so the room can be seen from the hall
 		BlockState lantern = Blocks.LANTERN.defaultBlockState();
-		put(chunk, pos, MIN_X + 1, floorY + 1, maxZ - 1, lantern);
-		put(chunk, pos, MAX_X - 1, floorY + 1, minZ + 1, lantern);
+		put(chunk, pos, roomMinX + 1, floorY + 1, maxZ - 1, lantern);
+		put(chunk, pos, roomMaxX - 1, floorY + 1, minZ + 1, lantern);
 	}
 
 	private static void put(ChunkAccess chunk, ChunkPos pos, int x, int y, int z, BlockState state) {
@@ -121,19 +139,19 @@ public final class PortalRoom {
 	}
 
 	/** Places the silverfish spawner and loot chests if they fall in the chunk being decorated. */
-	public static void placeBlockEntities(WorldGenLevel level, ChunkAccess chunk, long seed) {
+	public static void placeBlockEntities(WorldGenLevel level, ChunkAccess chunk, long seed, StripBounds bounds) {
 		ChunkPos pos = chunk.getPos();
 		RandomSource random = new XoroshiroRandomSource(Strip.mix(seed, 4001), Strip.mix(pos.x(), pos.z()));
 
-		BlockPos spawner = spawnerPos(seed);
+		BlockPos spawner = spawnerPos(seed, bounds);
 		if (contains(pos, spawner)) {
 			level.setBlock(spawner, Blocks.SPAWNER.defaultBlockState(), Block.UPDATE_CLIENTS);
 			if (level.getBlockEntity(spawner) instanceof SpawnerBlockEntity be) {
 				be.setEntityId(EntityTypes.SILVERFISH, random);
 			}
 		}
-		placeChest(level, pos, chestA(seed), Direction.SOUTH, random);
-		placeChest(level, pos, chestB(seed), Direction.NORTH, random);
+		placeChest(level, pos, chestA(seed, bounds), Direction.SOUTH, random);
+		placeChest(level, pos, chestB(seed, bounds), Direction.NORTH, random);
 	}
 
 	private static void placeChest(WorldGenLevel level, ChunkPos pos, BlockPos chest, Direction facing, RandomSource random) {

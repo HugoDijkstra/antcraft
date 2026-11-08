@@ -3,13 +3,15 @@
 	"id": "antcraft",
 	"version": "${version}",
 	"name": "AntCraft",
-	"description": "The world is a 20x300 strip that goes down almost 2000 blocks: bedrock floors with one hole each, underground forests, and the End portal at the very bottom.",
+	"description": "Adds the AntCraft Strip world type: a narrow strip (20x300 by default, configurable) that goes down almost 2000 blocks, with bedrock floors with one hole each, underground forests, and the End portal at the very bottom.",
 	"authors": ["hugo"],
 	"license": "MIT",
 	"icon": "assets/antcraft/icon.png",
 	"environment": "*",
 	"entrypoints": {
-		"main": ["dev.antcraft.AntCraft"]
+		"main": ["dev.antcraft.AntCraft"],
+		"client": ["dev.antcraft.client.AntCraftClient"],
+		"modmenu": ["dev.antcraft.client.AntCraftModMenu"]
 	},
 	"mixins": ["antcraft.mixins.json"],
 	"depends": {
@@ -17,5 +19,8 @@
 		"minecraft": "~26.3",
 		"java": ">=25",
 		"fabric-api": "*"
+	},
+	"suggests": {
+		"modmenu": "*"
 	}
 }

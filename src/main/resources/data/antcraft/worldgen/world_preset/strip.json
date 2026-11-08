@@ -4,6 +4,7 @@
       "type": "antcraft:strip_overworld",
       "generator": {
         "type": "antcraft:strip",
+        "size_from_config": true,
         "base": {
           "biome_source": {
             "type": "antcraft:strip",
@@ -30,6 +31,7 @@
       "type": "antcraft:strip_nether",
       "generator": {
         "type": "antcraft:nether_strip",
+        "size_from_config": true,
         "base": {
           "biome_source": {
             "type": "minecraft:multi_noise",

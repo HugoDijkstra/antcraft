@@ -2,5 +2,20 @@
   "block.antcraft.nether_seal": "Nether Seal",
   "block.antcraft.nether_seal.locked": "Sealed. A Nether Key from the Nether strip opens it.",
   "block.antcraft.nether_seal.opened": "The seal crumbles. The way down is open.",
-  "item.antcraft.nether_key": "Nether Key"
+  "item.antcraft.nether_key": "Nether Key",
+  "generator.antcraft.strip": "AntCraft Strip",
+  "antcraft.config.title": "AntCraft Settings",
+  "antcraft.config.new_worlds": "Strip size (only for worlds created from now on)",
+  "antcraft.config.strip_width": "Strip Width",
+  "antcraft.config.strip_length": "Strip Length",
+  "antcraft.config.mining_hardness": "Deep Mining Hardness",
+  "antcraft.config.mining_hardness.off": "Off",
+  "antcraft.config.mining_hardness.value": "+%s per layer",
+  "antcraft.config.mining_hardness.tooltip": "Pickaxe blocks in deep layer N take (1 + N x this) times as long to mine. Applies to worlds you play in singleplayer or open to LAN; on a server, the server's own setting is used.",
+  "antcraft.config.layer_titles": "Layer Titles",
+  "antcraft.config.spawn_mobs_near_players": "Mobs Spawn Near Players",
+  "antcraft.config.guardians": "Floor Guardians",
+  "antcraft.config.nether_key_gate": "Nether Key Seal",
+  "antcraft.config.nether_key_gate.tooltip": "Seal floor 4's hole until a Nether Key is used (applies to newly generated floors).",
+  "antcraft.config.ancient_key_gate": "Ancient Key Seal"
 }

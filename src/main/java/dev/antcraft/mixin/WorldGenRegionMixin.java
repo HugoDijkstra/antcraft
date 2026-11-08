@@ -1,7 +1,7 @@
 package dev.antcraft.mixin;
 
-import dev.antcraft.AntCraft;
 import dev.antcraft.Strip;
+import dev.antcraft.StripBounds;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.WorldGenRegion;
 import net.minecraft.world.entity.Entity;
@@ -25,7 +25,8 @@ public abstract class WorldGenRegionMixin {
 
 	@Inject(method = "addFreshEntity", at = @At("HEAD"), cancellable = true)
 	private void antcraft$onlyInsideStrip(Entity entity, CallbackInfoReturnable<Boolean> cir) {
-		if (!Strip.inside(entity.getBlockX(), entity.getBlockZ()) && AntCraft.isStripLevel(this.level)) {
+		StripBounds bounds = Strip.bounds(this.level);
+		if (bounds != null && !bounds.inside(entity.getBlockX(), entity.getBlockZ())) {
 			cir.setReturnValue(false);
 		}
 	}

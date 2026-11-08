@@ -42,15 +42,20 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * Overworld generator for AntCraft. Vanilla terrain (y -64..320) comes from the wrapped
- * {@link NoiseBasedChunkGenerator}; this class cuts it down to the 20x300 strip, adds the walls,
+ * {@link NoiseBasedChunkGenerator}; this class cuts it down to the strip ({@link StripBounds}, 20x300
+ * by default, stored per world), adds the walls,
  * and generates everything below -64 via {@link DeepTerrain}.
  *
  * <p>Walls: invisible barrier above ground, bedrock below it. Barrier lets skylight through, so a
  * full-height barrier wall would light up every deep layer from the side.
  */
-public final class StripChunkGenerator extends ChunkGenerator implements WrappedNoiseGenerator {
+public final class StripChunkGenerator extends ChunkGenerator implements WrappedNoiseGenerator, StripGenerator {
 	public static final MapCodec<StripChunkGenerator> CODEC = RecordCodecBuilder.mapCodec(
-		i -> i.group(NoiseBasedChunkGenerator.CODEC.codec().fieldOf("base").forGetter(g -> g.base)).apply(i, StripChunkGenerator::new)
+		i -> i.group(
+				NoiseBasedChunkGenerator.CODEC.codec().fieldOf("base").forGetter(g -> g.base),
+				StripBounds.SIZE_CODEC.forGetter(g -> g.bounds)
+			)
+			.apply(i, StripChunkGenerator::new)
 	);
 
 	public static final ResourceKey<Structure> DEEP_CITY = ResourceKey.create(
@@ -65,17 +70,28 @@ public final class StripChunkGenerator extends ChunkGenerator implements Wrapped
 	private static final ThreadLocal<Integer> DEEP_GROUND = new ThreadLocal<>();
 
 	private final NoiseBasedChunkGenerator base;
+	private final StripBounds bounds;
 	/** Per wall column: lowest y that is barrier (everything below is bedrock). */
 	private final Map<Long, Integer> wallSplit = new ConcurrentHashMap<>();
 
-	public StripChunkGenerator(NoiseBasedChunkGenerator base) {
+	public StripChunkGenerator(NoiseBasedChunkGenerator base, StripBounds bounds) {
 		super(base.getBiomeSource());
 		this.base = base;
+		this.bounds = bounds;
 	}
 
 	@Override
 	public NoiseBasedChunkGenerator base() {
 		return this.base;
+	}
+
+	@Override
+	public StripBounds bounds() {
+		return this.bounds;
+	}
+
+	private DeepTerrain terrain(long seed) {
+		return DeepTerrain.forSeed(seed, this.bounds);
 	}
 
 	@Override
@@ -88,7 +104,7 @@ public final class StripChunkGenerator extends ChunkGenerator implements Wrapped
 	private int wallSplitY(int x, int z, LevelHeightAccessor heightAccessor, RandomState randomState) {
 		return this.wallSplit.computeIfAbsent(((long) x << 32) ^ (z & 0xFFFFFFFFL), k -> {
 			// clamp the wall column to the nearest strip column so the split follows the strip's terrain
-			int sx = Math.clamp(x, Strip.MIN_X, Strip.MAX_X), sz = Math.clamp(z, Strip.MIN_Z, Strip.MAX_Z);
+			int sx = this.bounds.clampX(x), sz = this.bounds.clampZ(z);
 			int surface = this.base.getBaseHeight(sx, sz, Heightmap.Types.OCEAN_FLOOR_WG, heightAccessor, randomState);
 			return Math.max(surface - 1, Strip.VANILLA_MIN_Y);
 		});
@@ -99,7 +115,7 @@ public final class StripChunkGenerator extends ChunkGenerator implements Wrapped
 
 	@Override
 	public CompletableFuture<ChunkAccess> createBiomes(RandomState randomState, Blender blender, StructureManager structureManager, ChunkAccess chunk) {
-		if (!Strip.chunkTouchesStrip(chunk.getPos())) {
+		if (!this.bounds.chunkTouches(chunk.getPos())) {
 			return CompletableFuture.completedFuture(chunk); // void: default biome is fine, skip the climate noise
 		}
 		return super.createBiomes(randomState, blender, structureManager, chunk);
@@ -118,15 +134,15 @@ public final class StripChunkGenerator extends ChunkGenerator implements Wrapped
 		Set<Holder<Biome>> possibleBiomes
 	) {
 		ChunkPos pos = chunk.getPos();
-		if (!Strip.chunkTouchesStrip(pos)) {
+		if (!this.bounds.chunkTouches(pos)) {
 			return CompletableFuture.completedFuture(chunk); // pure void
 		}
-		CompletableFuture<ChunkAccess> vanilla = Strip.chunkOverlapsStrip(pos)
+		CompletableFuture<ChunkAccess> vanilla = this.bounds.chunkOverlaps(pos)
 			? this.base.buildTerrain(chunk, blender, randomState, structureManager, biomeManager, carverBiomeRegion, possibleBiomes)
 			: CompletableFuture.completedFuture(chunk);
 		List<BoundingBox> cityPieces = findDeepPieces(structureManager, pos);
 		return vanilla.thenApply(c -> {
-			this.shapeChunk(c, DeepTerrain.forSeed(randomState.seed()), cityPieces, randomState);
+			this.shapeChunk(c, this.terrain(randomState.seed()), cityPieces, randomState);
 			return c;
 		});
 	}
@@ -154,12 +170,12 @@ public final class StripChunkGenerator extends ChunkGenerator implements Wrapped
 				for (int lz = 0; lz < 16; lz++) {
 					int x = pos.getMinBlockX() + lx;
 					int z = pos.getMinBlockZ() + lz;
-					if (Strip.inside(x, z)) {
+					if (this.bounds.inside(x, z)) {
 						terrain.reshapeVanillaBottom(chunk, lx, lz, x, z);
 						terrain.fillColumn(chunk, lx, lz, x, z, cityPieces);
 					} else {
 						clearColumnRaw(chunk, lx, lz);
-						if (Strip.isWall(x, z)) {
+						if (this.bounds.isWall(x, z)) {
 							int split = this.wallSplitY(x, z, heightAccessor, randomState);
 							for (int y = Strip.WORLD_MIN_Y; y <= Strip.WORLD_MAX_Y; y++) {
 								DeepTerrain.set(chunk, lx, y, lz, y < split ? DeepTerrain.BEDROCK : DeepTerrain.BARRIER);
@@ -168,15 +184,15 @@ public final class StripChunkGenerator extends ChunkGenerator implements Wrapped
 					}
 				}
 			}
-			if (Strip.chunkOverlapsStrip(pos)) {
+			if (this.bounds.chunkOverlaps(pos)) {
 				terrain.placeOres(chunk);
-				PortalRoom.build(chunk, terrain.seed());
+				PortalRoom.build(chunk, terrain.seed(), this.bounds);
 				terrain.cutHoles(chunk);
 			}
 		} finally {
 			for (LevelChunkSection section : sections) section.release();
 		}
-		fixHeightmaps(chunk);
+		this.fixHeightmaps(chunk);
 	}
 
 	/** Removes everything in a column during terrain generation (before lighting). Skips all-air sections. */
@@ -199,15 +215,15 @@ public final class StripChunkGenerator extends ChunkGenerator implements Wrapped
 	}
 
 	/** Re-derives the world-gen heightmaps for columns we rewrote (walls and cleared columns). */
-	private static void fixHeightmaps(ChunkAccess chunk) {
+	private void fixHeightmaps(ChunkAccess chunk) {
 		ChunkPos pos = chunk.getPos();
 		for (Heightmap.Types type : List.of(Heightmap.Types.OCEAN_FLOOR_WG, Heightmap.Types.WORLD_SURFACE_WG)) {
 			Heightmap heightmap = chunk.getOrCreateHeightmapUnprimed(type);
 			for (int lx = 0; lx < 16; lx++) {
 				for (int lz = 0; lz < 16; lz++) {
 					int x = pos.getMinBlockX() + lx, z = pos.getMinBlockZ() + lz;
-					if (Strip.inside(x, z)) continue;
-					if (Strip.isWall(x, z)) {
+					if (this.bounds.inside(x, z)) continue;
+					if (this.bounds.isWall(x, z)) {
 						heightmap.update(lx, Strip.WORLD_MAX_Y, lz, DeepTerrain.BARRIER);
 					} else {
 						int first = heightmap.getFirstAvailable(lx, lz);
@@ -252,8 +268,8 @@ public final class StripChunkGenerator extends ChunkGenerator implements Wrapped
 				for (int lx = 0; lx < 16; lx++) {
 					for (int lz = 0; lz < 16; lz++) {
 						int x = chunkPos.getMinBlockX() + lx, z = chunkPos.getMinBlockZ() + lz;
-						if (Strip.inside(x, z)) continue;
-						boolean wall = Strip.isWall(x, z);
+						if (this.bounds.inside(x, z)) continue;
+						boolean wall = this.bounds.isWall(x, z);
 						int split = wall ? this.wallSplitY(x, z, chunk.getHeightAccessorForGeneration(), randomState) : Integer.MIN_VALUE;
 						for (int[] range : SPILL_RANGES) {
 							for (int i = 0; i < sections.length; i++) {
@@ -284,15 +300,15 @@ public final class StripChunkGenerator extends ChunkGenerator implements Wrapped
 	@Override
 	public void applyBiomeDecoration(WorldGenLevel level, ChunkAccess chunk, StructureManager structureManager) {
 		ChunkPos pos = chunk.getPos();
-		if (!Strip.chunkOverlapsStrip(pos)) return;
+		if (!this.bounds.chunkOverlaps(pos)) return;
 		super.applyBiomeDecoration(level, chunk, structureManager);
-		DeepTerrain terrain = DeepTerrain.forSeed(level.getSeed());
-		DeepTerrain.sealAboveFirstHall(level, pos);
+		DeepTerrain terrain = this.terrain(level.getSeed());
+		terrain.sealAboveFirstHall(level, pos);
 		UndergroundForest.placeTrees(level, this, chunk, terrain, findDeepPieces(structureManager, pos));
 		terrain.decorateForests(level, chunk); // plants and lights after trees, so they don't block them
-		PortalRoom.placeBlockEntities(level, chunk, level.getSeed());
+		PortalRoom.placeBlockEntities(level, chunk, level.getSeed(), this.bounds);
 		this.clipRegion(level, pos);
-		DeepTerrain.keepLeaves(level, pos);
+		terrain.keepLeaves(level, pos);
 	}
 
 	@Override
@@ -305,7 +321,7 @@ public final class StripChunkGenerator extends ChunkGenerator implements Wrapped
 		ResourceKey<Level> level
 	) {
 		// only let structures start inside the strip
-		if (!Strip.chunkOverlapsStrip(centerChunk.getPos())) return;
+		if (!this.bounds.chunkOverlaps(centerChunk.getPos())) return;
 		super.createStructures(registryAccess, state, structureManager, centerChunk, structureTemplateManager, level);
 
 		// Vanilla structures must stay above the first floor's hall. With the deeper world, jigsaw
@@ -320,11 +336,11 @@ public final class StripChunkGenerator extends ChunkGenerator implements Wrapped
 		}
 
 		if (level != Level.OVERWORLD) return;
-		if (centerChunk.getPos().equals(Strip.CITY_CHUNK)) {
+		if (centerChunk.getPos().equals(Strip.cityChunk(this.bounds))) {
 			this.startDeepStructure(DEEP_CITY, null, registryAccess, state, structureManager, centerChunk, structureTemplateManager, level);
 		}
 		for (int layer = 1; layer <= Strip.DEEP_LAYERS; layer++) {
-			if (centerChunk.getPos().equals(Strip.villageChunk(state.getLevelSeed(), layer))) {
+			if (centerChunk.getPos().equals(Strip.villageChunk(state.getLevelSeed(), layer, this.bounds))) {
 				ResourceKey<Structure> village = ResourceKey.create(
 					Registries.STRUCTURE, Identifier.fromNamespaceAndPath(AntCraft.MOD_ID, "deep_village_" + Strip.villageType(layer))
 				);
@@ -379,10 +395,10 @@ public final class StripChunkGenerator extends ChunkGenerator implements Wrapped
 			DEEP_GROUND.remove();
 		}
 		if (start.isValid() && ground != null) {
-			// The jigsaw start sits at the chunk corner and can rotate away from the 20-wide strip.
+			// The jigsaw start sits at the chunk corner and can rotate away from the narrow strip.
 			// Shift the whole village sideways so its centre piece is in the middle of the strip.
 			BoundingBox centre = start.getPieces().getFirst().getBoundingBox();
-			int dx = Strip.CENTER_X - (centre.minX() + centre.maxX()) / 2;
+			int dx = this.bounds.centerX() - (centre.minX() + centre.maxX()) / 2;
 			for (StructurePiece piece : start.getPieces()) piece.move(dx, 0, 0);
 		}
 		if (start.isValid()) {
@@ -407,15 +423,15 @@ public final class StripChunkGenerator extends ChunkGenerator implements Wrapped
 
 	@Override
 	public void spawnOriginalMobs(WorldGenRegion region) {
-		if (!Strip.chunkOverlapsStrip(region.getCenter())) return;
+		if (!this.bounds.chunkOverlaps(region.getCenter())) return;
 		this.base.spawnOriginalMobs(region);
-		UndergroundForest.spawnAnimals(region, DeepTerrain.forSeed(region.getSeed()));
+		UndergroundForest.spawnAnimals(region, this.terrain(region.getSeed()));
 	}
 
 	/** Spawn search starts in the middle of the strip. */
 	@Override
 	public ChunkPos getOrigin(RandomState randomState) {
-		return new ChunkPos(Strip.CENTER_X >> 4, Strip.CENTER_Z >> 4);
+		return new ChunkPos(this.bounds.centerX() >> 4, this.bounds.centerZ() >> 4);
 	}
 
 	// ------------------------------------------------------------------ plain delegation
