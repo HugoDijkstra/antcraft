@@ -4,7 +4,6 @@
   "block.antcraft.nether_seal.opened": "The seal crumbles. The way down is open.",
   "item.antcraft.nether_key": "Nether Key",
   "generator.antcraft.strip": "AntCraft Strip",
-  "generator.antcraft.strip_tall_preview": "AntCraft Tall (preview)",
   "biome.antcraft.ember_rift": "Ember Rift",
   "antcraft.config.title": "AntCraft Settings",
   "antcraft.config.new_worlds": "Strip size (only for worlds created from now on)",
@@ -223,5 +222,6 @@
   "antcraft.end_tier.u1": "The Hanging Roots",
   "antcraft.end_tier.u2": "The Purpur Crypt",
   "antcraft.end_tier.u3": "The Silent Drift",
-  "antcraft.end_tier.u4": "The Void Root"
+  "antcraft.end_tier.u4": "The Void Root",
+  "generator.antcraft.strip_classic": "AntCraft Strip (classic)"
 }
