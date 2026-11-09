@@ -19,7 +19,7 @@ public enum LayerTheme {
 	MUSHROOM("Mushroom Abyss", "layer_8", "antcraft.layer.8", Flags.MUSHROOM),
 	// tall worlds
 	AUTUMN_HOLLOW("Autumn Hollow", "layer_autumn_hollow", "antcraft.layer.autumn_hollow", 0),
-	LUSH_GROTTO("Lush Grotto", "layer_lush_grotto", "antcraft.layer.lush_grotto", 0),
+	LUSH_GROTTO("Lush Grotto", "layer_lush_grotto", "antcraft.layer.lush_grotto", Flags.GLOW_BERRIES),
 	SULFUR_SPRINGS("Sulfur Springs", "layer_sulfur_springs", "antcraft.layer.sulfur_springs", 0),
 	CRYSTAL_HOLLOWS("Crystal Hollows", "layer_crystal_hollows", "antcraft.layer.crystal_hollows", 0),
 	FROZEN_DEPTHS("Frozen Depths", "layer_frozen_depths", "antcraft.layer.frozen_depths", 0),

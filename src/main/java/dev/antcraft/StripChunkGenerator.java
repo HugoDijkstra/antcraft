@@ -65,7 +65,7 @@ public final class StripChunkGenerator extends ChunkGenerator implements Wrapped
 	 */
 	public static final MapCodec<StripChunkGenerator> CODEC = RecordCodecBuilder.<StripChunkGenerator>mapCodec(
 		i -> i.group(
-				NoiseBasedChunkGenerator.CODEC.codec().fieldOf("base").forGetter(g -> g.base),
+				NoiseBasedChunkGenerator.CODEC.codec().fieldOf("base").forGetter(g -> g.serializedBase),
 				StripBounds.SIZE_CODEC.forGetter(g -> g.bounds),
 				Codec.intRange(1, StripLayout.LATEST).optionalFieldOf("layout", 1).forGetter(g -> g.layout.id)
 			)
@@ -78,7 +78,7 @@ public final class StripChunkGenerator extends ChunkGenerator implements Wrapped
 	 * a message) instead of throwing out of the codec.
 	 */
 	private static DataResult<StripChunkGenerator> checkLayout(StripChunkGenerator g) {
-		if (g.base.getBiomeSource() instanceof StripBiomeSource source && source.layout() != g.layout.id) {
+		if (g.serializedBase.getBiomeSource() instanceof StripBiomeSource source && source.layout() != g.layout.id) {
 			return DataResult.error(() -> "AntCraft strip generator has layout " + g.layout.id + " but its biome source has layout " + source.layout());
 		}
 		return DataResult.success(g);
@@ -104,6 +104,13 @@ public final class StripChunkGenerator extends ChunkGenerator implements Wrapped
 		return DEEP_GROUND.get() != null;
 	}
 
+	/** The generator as saved in the world (its biome source is the {@link StripBiomeSource}). */
+	private final NoiseBasedChunkGenerator serializedBase;
+	/**
+	 * The vanilla generator that makes the terrain. Layout 1: {@link #serializedBase} itself. Tall
+	 * layouts: a copy holding the raw vanilla biome source (the carvers ask it for biomes in vanilla
+	 * coordinates), run in a {@link FrameTerrain} frame.
+	 */
 	private final NoiseBasedChunkGenerator base;
 	private final StripBounds bounds;
 	private final StripLayout layout;
@@ -114,9 +121,17 @@ public final class StripChunkGenerator extends ChunkGenerator implements Wrapped
 
 	public StripChunkGenerator(NoiseBasedChunkGenerator base, StripBounds bounds, int layout) {
 		super(base.getBiomeSource());
-		this.base = base;
+		this.serializedBase = base;
 		this.bounds = bounds;
 		this.layout = StripLayout.byId(layout);
+		if (this.layout.frameOffset != 0) {
+			if (!(base.getBiomeSource() instanceof StripBiomeSource source)) {
+				throw new IllegalArgumentException("AntCraft layout " + layout + " needs the antcraft:strip biome source");
+			}
+			this.base = new NoiseBasedChunkGenerator(source.base(), base.generatorSettings());
+		} else {
+			this.base = base;
+		}
 		this.spillRanges = spillRanges(this.layout);
 	}
 
@@ -164,9 +179,17 @@ public final class StripChunkGenerator extends ChunkGenerator implements Wrapped
 		return this.wallSplit.computeIfAbsent(((long) x << 32) ^ (z & 0xFFFFFFFFL), k -> {
 			// clamp the wall column to the nearest strip column so the split follows the strip's terrain
 			int sx = this.bounds.clampX(x), sz = this.bounds.clampZ(z);
-			int surface = this.base.getBaseHeight(sx, sz, Heightmap.Types.OCEAN_FLOOR_WG, heightAccessor, randomState);
+			int surface = this.vanillaBaseHeight(sx, sz, Heightmap.Types.OCEAN_FLOOR_WG, heightAccessor, randomState);
 			return Math.max(surface - 1, this.layout.vanillaMinY);
 		});
+	}
+
+	/** The vanilla generator's surface height in real coordinates (moved by the frame offset). */
+	private int vanillaBaseHeight(int x, int z, Heightmap.Types type, LevelHeightAccessor heightAccessor, RandomState randomState) {
+		int d = this.frameOffset();
+		if (d == 0) return this.base.getBaseHeight(x, z, type, heightAccessor, randomState);
+		// "nothing found" is the accessor's min y in both coordinate systems
+		return this.base.getBaseHeight(x, z, type, LevelHeightAccessor.create(heightAccessor.getMinY() - d, heightAccessor.getHeight()), randomState) + d;
 	}
 
 
@@ -196,10 +219,22 @@ public final class StripChunkGenerator extends ChunkGenerator implements Wrapped
 		if (!this.bounds.chunkTouches(pos)) {
 			return CompletableFuture.completedFuture(chunk); // pure void
 		}
+		List<BoundingBox> cityPieces = this.findDeepPieces(structureManager, pos);
+		if (this.framed() && this.bounds.chunkOverlaps(pos)) {
+			// the vanilla terrain runs in its own coordinates on a frame over the real sections
+			FrameTerrain.FrameProtoChunk frame = FrameTerrain.frame(
+				chunk, this.frameOffset(), FrameTerrain.OVERWORLD_FRAME, carverBiomeRegion != null ? carverBiomeRegion.registryAccess() : null
+			);
+			BiomeManager shifted = new FrameTerrain.ShiftedBiomeManager(biomeManager, this.frameOffset());
+			return this.base.buildTerrain(frame, Blender.empty(), randomState, structureManager, shifted, carverBiomeRegion, possibleBiomes).thenApply(f -> {
+				FrameTerrain.transfer(frame, chunk);
+				this.shapeChunk(chunk, this.terrain(randomState.seed()), cityPieces, randomState);
+				return chunk;
+			});
+		}
 		CompletableFuture<ChunkAccess> vanilla = this.bounds.chunkOverlaps(pos)
 			? this.base.buildTerrain(chunk, blender, randomState, structureManager, biomeManager, carverBiomeRegion, possibleBiomes)
 			: CompletableFuture.completedFuture(chunk);
-		List<BoundingBox> cityPieces = this.findDeepPieces(structureManager, pos);
 		return vanilla.thenApply(c -> {
 			this.shapeChunk(c, this.terrain(randomState.seed()), cityPieces, randomState);
 			return c;
@@ -212,12 +247,23 @@ public final class StripChunkGenerator extends ChunkGenerator implements Wrapped
 		this.terrain(level.getSeed()).retrofit(level, chunk, this.findDeepPieces(level.structureManager(), chunk.getPos()));
 	}
 
+	/**
+	 * True for AntCraft's own deep starts: every {@code antcraft:} structure whose path starts with
+	 * {@code deep_}. Tall layouts tell deep starts by key, not by height: vanilla igloos and ocean
+	 * ruins are started at a placeholder y below the moved vanilla world and re-seated later.
+	 */
+	public static boolean isDeepKey(RegistryAccess registryAccess, Structure structure) {
+		Identifier id = registryAccess.lookupOrThrow(Registries.STRUCTURE).getKey(structure);
+		return id != null && id.getNamespace().equals(AntCraft.MOD_ID) && id.getPath().startsWith("deep_");
+	}
+
 	/** Boxes of deep structure pieces (ancient city, deep villages) that come near this chunk. */
 	private List<BoundingBox> findDeepPieces(StructureManager structureManager, ChunkPos pos) {
 		List<BoundingBox> boxes = new ArrayList<>();
 		BoundingBox chunkBox = new BoundingBox(pos.getMinBlockX() - 4, this.layout.worldMinY, pos.getMinBlockZ() - 4, pos.getMaxBlockX() + 4, this.layout.worldMaxY, pos.getMaxBlockZ() + 4);
+		boolean byKey = this.layout.id >= 2;
 		for (StructureStart start : structureManager.startsForStructure(pos.x(), pos.z(), s -> true)) {
-			if (start.getBoundingBox().maxY() >= this.layout.vanillaMinY) continue;
+			if (byKey ? !isDeepKey(structureManager.registryAccess(), start.getStructure()) : start.getBoundingBox().maxY() >= this.layout.vanillaMinY) continue;
 			for (StructurePiece piece : start.getPieces()) {
 				if (piece.getBoundingBox().intersects(chunkBox)) boxes.add(piece.getBoundingBox());
 			}
@@ -302,14 +348,27 @@ public final class StripChunkGenerator extends ChunkGenerator implements Wrapped
 	// ------------------------------------------------------------------ clipping after decoration
 
 	private static int[][] spillRanges(StripLayout layout) {
-		int[][] ranges = new int[layout.deepLayers + 2][];
-		ranges[0] = new int[] {layout.vanillaMinY, layout.worldMaxY};
-		for (int layer = 1; layer <= layout.deepLayers; layer++) {
-			int floor = layout.forestFloor(layer);
-			ranges[layer] = new int[] {floor - 8, floor + layout.forestHeight + 8};
+		if (layout.id == 1) {
+			int[][] ranges = new int[layout.deepLayers + 2][];
+			ranges[0] = new int[] {layout.vanillaMinY, layout.worldMaxY};
+			for (int layer = 1; layer <= layout.deepLayers; layer++) {
+				int floor = layout.forestFloor(layer);
+				ranges[layer] = new int[] {floor - 8, floor + layout.forestHeight + 8};
+			}
+			ranges[layout.deepLayers + 1] = new int[] {layout.cityMinY(), layout.cityMaxY()};
+			return ranges;
 		}
-		ranges[layout.deepLayers + 1] = new int[] {layout.cityMinY(), layout.cityMaxY()};
-		return ranges;
+		// tall layouts: the vanilla band, every forest band, the city and the Trial Vault
+		List<int[]> ranges = new ArrayList<>();
+		ranges.add(new int[] {layout.vanillaMinY, layout.worldMaxY});
+		for (int layer = 1; layer <= layout.deepLayers; layer++) {
+			if (!layout.layer(layer).hasForest()) continue;
+			int floor = layout.forestFloor(layer);
+			ranges.add(new int[] {floor - 8, floor + layout.forestHeight + 8});
+		}
+		ranges.add(new int[] {layout.cityMinY(), layout.cityMaxY()});
+		if (layout.vaultLayer >= 1) ranges.add(new int[] {layout.layerBottom(layout.vaultLayer), layout.layerTop(layout.vaultLayer)});
+		return ranges.toArray(int[][]::new);
 	}
 
 	/**
@@ -435,14 +494,22 @@ public final class StripChunkGenerator extends ChunkGenerator implements Wrapped
 		int lowest = this.layout.hallBottom(0) + this.layout.hallHeight + 1;
 		for (Map.Entry<Structure, StructureStart> entry : List.copyOf(centerChunk.getAllStarts().entrySet())) {
 			StructureStart start = entry.getValue();
-			if (start.isValid() && start.getBoundingBox().minY() < lowest) {
+			if (!start.isValid()) continue;
+			// tall layouts test the pieces themselves: the start's box is inflated by 12 for terrain
+			// adaptation, so vanilla's lowest trial chambers (pieces down to the frame's padding) would go
+			int minY = this.layout.id >= 2 ? piecesMinY(start) : start.getBoundingBox().minY();
+			if (minY < lowest && !(this.layout.id >= 2 && this.keepsLowStart(registryAccess, entry.getKey()))) {
 				centerChunk.setStartForStructure(entry.getKey(), StructureStart.INVALID_START);
 			}
 		}
 
 		if (level != Level.OVERWORLD) return;
 		if (centerChunk.getPos().equals(this.layout.cityChunk(this.bounds))) {
-			this.startDeepStructure(DEEP_CITY, null, registryAccess, state, structureManager, centerChunk, structureTemplateManager, level);
+			// the city JSON's absolute start height (-1280) moves to this layout's city layer
+			WorldGenShift.withOverride(this.layout.cityAnchorDelta, () -> {
+				this.startDeepStructure(DEEP_CITY, null, registryAccess, state, structureManager, centerChunk, structureTemplateManager, level);
+				return null;
+			});
 		}
 		for (int layer = 1; layer <= this.layout.deepLayers; layer++) {
 			ResourceKey<Structure> village = this.layout.layer(layer).villageStructure();
@@ -454,6 +521,30 @@ public final class StripChunkGenerator extends ChunkGenerator implements Wrapped
 		if (centerChunk.getPos().equals(this.layout.pyramidChunk(state.getLevelSeed(), this.bounds))) {
 			this.startDeepPyramid(registryAccess, state.getLevelSeed(), structureManager, centerChunk);
 		}
+	}
+
+	/**
+	 * Tall layouts: vanilla starts that sit at a placeholder height until they are placed (and are
+	 * then re-seated on the real surface or sea floor), and our own deep starts, survive the
+	 * "below the first hall" filter.
+	 */
+	private static final java.util.Set<net.minecraft.world.level.levelgen.structure.StructureType<?>> PLACEHOLDER_TYPES = java.util.Set.of(
+		net.minecraft.world.level.levelgen.structure.StructureType.DESERT_PYRAMID, net.minecraft.world.level.levelgen.structure.StructureType.JUNGLE_TEMPLE,
+		net.minecraft.world.level.levelgen.structure.StructureType.SWAMP_HUT, net.minecraft.world.level.levelgen.structure.StructureType.IGLOO,
+		net.minecraft.world.level.levelgen.structure.StructureType.SHIPWRECK, net.minecraft.world.level.levelgen.structure.StructureType.OCEAN_RUIN,
+		net.minecraft.world.level.levelgen.structure.StructureType.BURIED_TREASURE
+	);
+
+	private static int piecesMinY(StructureStart start) {
+		int minY = Integer.MAX_VALUE;
+		for (StructurePiece piece : start.getPieces()) minY = Math.min(minY, piece.getBoundingBox().minY());
+		return minY;
+	}
+
+	private boolean keepsLowStart(RegistryAccess registryAccess, Structure structure) {
+		if (PLACEHOLDER_TYPES.contains(structure.type())) return true;
+		Identifier id = registryAccess.lookupOrThrow(Registries.STRUCTURE).getKey(structure);
+		return id != null && id.getNamespace().equals(AntCraft.MOD_ID);
 	}
 
 	/**
@@ -577,32 +668,50 @@ public final class StripChunkGenerator extends ChunkGenerator implements Wrapped
 		return this.base.getGenDepth();
 	}
 
+	// The frame (tall layouts): the vanilla world is reported D blocks higher. Lithium overwrites
+	// NoiseBasedChunkGenerator.getSeaLevel; it is only called here.
+
 	@Override
 	public int getSeaLevel() {
-		return this.base.getSeaLevel();
+		return this.base.getSeaLevel() + this.frameOffset();
 	}
 
 	@Override
 	public int getMinY() {
-		return this.base.getMinY();
+		return this.frameMinY();
+	}
+
+	@Override
+	public int getSpawnHeight(LevelHeightAccessor heightAccessor) {
+		return super.getSpawnHeight(heightAccessor) + this.frameOffset();
 	}
 
 	@Override
 	public int getBaseHeight(int x, int z, Heightmap.Types type, LevelHeightAccessor heightAccessor, RandomState randomState) {
 		Integer ground = DEEP_GROUND.get();
 		if (ground != null) return ground;
-		return this.base.getBaseHeight(x, z, type, heightAccessor, randomState);
+		return this.vanillaBaseHeight(x, z, type, heightAccessor, randomState);
 	}
 
 	@Override
 	public NoiseColumn getBaseColumn(int x, int z, LevelHeightAccessor heightAccessor, RandomState randomState) {
-		return this.base.getBaseColumn(x, z, heightAccessor, randomState);
+		int d = this.frameOffset();
+		if (d == 0) return this.base.getBaseColumn(x, z, heightAccessor, randomState);
+		LevelHeightAccessor shifted = LevelHeightAccessor.create(heightAccessor.getMinY() - d, heightAccessor.getHeight());
+		NoiseColumn column = this.base.getBaseColumn(x, z, shifted, randomState);
+		// the column covers the vanilla range clamped to the accessor (NoiseSettings.clampToHeightAccessor)
+		int minY = Math.max(this.base.getMinY(), shifted.getMinY());
+		int height = Math.min(this.base.getMinY() + this.base.getGenDepth(), shifted.getMaxY() + 1) - minY;
+		BlockState[] states = new BlockState[Math.max(0, height)];
+		for (int i = 0; i < states.length; i++) states[i] = column == null ? DeepTerrain.AIR : column.getBlock(minY + i);
+		return new NoiseColumn(minY + d, states);
 	}
 
 	@Override
 	public void addDebugScreenInfo(List<String> result, RandomState randomState, BlockPos feetPos, SamplerContext samplerContext) {
-		this.base.addDebugScreenInfo(result, randomState, feetPos, samplerContext);
+		this.base.addDebugScreenInfo(result, randomState, feetPos.below(this.frameOffset()), samplerContext);
 		int layer = this.layout.layerAt(feetPos.getY());
-		result.add("AntCraft layer: " + (layer < 0 ? "bedrock" : layer));
+		String name = layer >= 1 && this.layout.layer(layer).theme() != null ? " (" + this.layout.layer(layer).theme().englishName + ")" : "";
+		result.add("AntCraft layer: " + (layer < 0 ? "bedrock" : layer) + name);
 	}
 }

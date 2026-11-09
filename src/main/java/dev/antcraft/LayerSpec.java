@@ -56,14 +56,14 @@ public record LayerSpec(
 	/** What fills the carved caves' floor puddles. */
 	public enum Puddle { WATER_OR_LAVA, LAVA }
 
-	/** Ground plants of the forest floor. */
-	public enum PlantPalette { MEADOW, TAIGA, CHERRY, DESERT, SWAMP, MUSHROOM }
+	/** Ground plants of the forest floor (the first six are layout 1's). */
+	public enum PlantPalette { MEADOW, TAIGA, CHERRY, DESERT, SWAMP, MUSHROOM, AUTUMN, BADLANDS, DARKWOOD, LUSH, JUNGLE, SAVANNA, PALE, CRAGS, EMBER, NONE }
 
-	/** The forest floor's top block. */
-	public enum GroundPalette { GRASS, SAND, MUD_AND_GRASS, MYCELIUM }
+	/** The forest floor's top block (the first four are layout 1's). */
+	public enum GroundPalette { GRASS, SAND, MUD_AND_GRASS, MYCELIUM, PODZOL_MIX, COARSE_MIX, RED_SAND, MOSS, PALE_MOSS, STONE_MIX, SCULK, SNOW, WARPED_NYLIUM }
 
-	/** Animals spawned in the forest at generation. */
-	public enum Animals { FARM, DESERT, MOOSHROOM }
+	/** Animals spawned in the forest at generation (NONE: a silent layer). */
+	public enum Animals { FARM, DESERT, MOOSHROOM, NONE }
 
 	/** Hand-started mineshaft in the cave band. */
 	public enum Mineshaft { NONE, NORMAL, MESA }

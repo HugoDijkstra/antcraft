@@ -1,6 +1,7 @@
 {
   "replace": false,
   "values": [
-    "antcraft:strip"
+    "antcraft:strip",
+    "antcraft:strip_tall_preview"
   ]
 }

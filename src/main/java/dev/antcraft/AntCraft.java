@@ -60,6 +60,8 @@ public final class AntCraft implements ModInitializer {
 			}
 		});
 
+		ServerLifecycleEvents.SERVER_STARTING.register(server -> FrameTerrain.setFallbackFactory(server.registryAccess()));
+		net.fabricmc.fabric.api.event.lifecycle.v1.ServerLevelEvents.LOAD.register((server, level) -> checkLayoutHeight(level));
 		ServerLifecycleEvents.SERVER_STARTED.register(AntCraft::onServerStarted);
 		ServerTickEvents.END_SERVER_TICK.register(AntCraft::onServerTick);
 	}
@@ -77,6 +79,19 @@ public final class AntCraft implements ModInitializer {
 
 	public static boolean isStripLevel(ServerLevel level) {
 		return level.getChunkSource().getGenerator() instanceof StripGenerator;
+	}
+
+	/**
+	 * A strip overworld's layout needs the matching dimension type (its height). A world whose
+	 * level.dat pairs them wrongly would generate broken terrain: refuse to load it.
+	 */
+	private static void checkLayoutHeight(ServerLevel level) {
+		StripLayout layout = Strip.layout(level);
+		if (layout == null) return;
+		if (level.getMinY() != layout.worldMinY || level.getMaxY() != layout.worldMaxY) {
+			throw new IllegalStateException("AntCraft layout " + layout.id + " needs dimension type " + (layout.id >= 2 ? Strip.TALL_OVERWORLD_TYPE.identifier() : "antcraft:strip_overworld")
+				+ " (y " + layout.worldMinY + ".." + layout.worldMaxY + "), but " + level.dimension().identifier() + " has y " + level.getMinY() + ".." + level.getMaxY());
+		}
 	}
 
 	/** Makes sure the world spawn is on dry land inside the strip. */

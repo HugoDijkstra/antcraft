@@ -49,10 +49,33 @@ public final class StripLayout {
 		LayerTables::layout1
 	);
 
-	/** Every layout by id (index = id). */
-	private static final StripLayout[] BY_ID = {null, LAYOUT_1};
+	/**
+	 * The tall world (spec v2, section 3.1): the vanilla world moved up by 1696 to 1632..2015, 19
+	 * deep layers 196 apart below it (layer 7, the Trial Vault, 128), world -2032..2031. Its
+	 * numbers may change until it becomes the default preset; only preview worlds use it.
+	 */
+	public static final StripLayout LAYOUT_2 = new StripLayout(
+		2, 1696, -2032, 2031, 1632, -2028, 19,
+		new int[] {0, 196, 196, 196, 196, 196, 196, 128, 196, 196, 196, 196, 196, 196, 196, 196, 196, 196, 196},
+		3, 6, 40,
+		12, -597,
+		5, 13, 16, 7, 385,
+		guardians(Map.of(
+			0, GuardianId.TUNNEL_CAPTAIN, 2, GuardianId.DEEP_BEAST, 4, GuardianId.CANYON_CONJURER, 8, GuardianId.BROOD_MOTHER,
+			11, GuardianId.GALE_LORD, 14, GuardianId.DESERT_COLOSSUS, 18, GuardianId.EMBER_LORD
+		)),
+		14,
+		new String[] {
+			null, "plains", "taiga", null, null, "plains", null, null, null, "savanna", null,
+			null, null, "plains", "desert", null, "taiga", "snowy", null, "snowy"
+		},
+		LayerTables::layout2
+	);
 
-	public static final int LATEST = 1;
+	/** Every layout by id (index = id). */
+	private static final StripLayout[] BY_ID = {null, LAYOUT_1, LAYOUT_2};
+
+	public static final int LATEST = 2;
 
 	public static StripLayout byId(int id) {
 		if (id < 1 || id >= BY_ID.length) throw new IllegalArgumentException("Unknown AntCraft strip layout " + id);
@@ -273,10 +296,14 @@ public final class StripLayout {
 		return layer >= 0 && layer < this.villageTypes.length ? this.villageTypes[layer] : null;
 	}
 
-	/** Structure path of a deep layer's village ({@code antcraft:<path>}), or null. */
+	/**
+	 * Structure path of a deep layer's village ({@code antcraft:<path>}), or null. Layout 1 uses one
+	 * structure per village type; later layouts one per layer (bigger villages, see the JSONs).
+	 */
 	public @org.jspecify.annotations.Nullable String villageStructure(int layer) {
 		String type = this.villageType(layer);
-		return type == null ? null : "deep_village_" + type;
+		if (type == null) return null;
+		return this.id == 1 ? "deep_village_" + type : "deep_village_layer_" + layer;
 	}
 
 	/**

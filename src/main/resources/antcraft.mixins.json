@@ -3,6 +3,8 @@
 	"package": "dev.antcraft.mixin",
 	"compatibilityLevel": "JAVA_25",
 	"mixins": [
+		"BeardifierAccessor",
+		"BiomeManagerAccessor",
 		"ChunkMapMixin",
 		"DeepCropGrowthMixin",
 		"DeepMiningMixin",
@@ -18,15 +20,30 @@
 		"EnderDragonPathMixin",
 		"EnderEyeMixin",
 		"GravityProcessorMixin",
+		"JigsawStartHeightMixin",
 		"JigsawStripMixin",
 		"NaturalSpawnerMixin",
+		"NetherFortressMixin",
+		"NoiseChunkBeardMixin",
+		"OceanMonumentBuildingMixin",
+		"OceanMonumentStructureMixin",
+		"PlacementContextMixin",
 		"PortalDestinationMixin",
 		"PortalForcerMixin",
+		"RuinedPortalMixin",
 		"ScatteredFeaturePieceAccessor",
+		"SlimeMixin",
+		"StructureStartAccessorMixin",
+		"VerticalAnchorAbsoluteMixin",
 		"WorldDimensionsMixin",
 		"SpawnStateAccessor",
 		"VillagerTradesMixin",
-		"WorldGenRegionMixin"
+		"WorldGenRegionMixin",
+		"WorldGenerationContextMixin",
+		"WoodlandMansionMixin"
+	],
+	"client": [
+		"client.HorizonMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

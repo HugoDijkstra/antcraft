@@ -4,6 +4,8 @@
   "block.antcraft.nether_seal.opened": "The seal crumbles. The way down is open.",
   "item.antcraft.nether_key": "Nether Key",
   "generator.antcraft.strip": "AntCraft Strip",
+  "generator.antcraft.strip_tall_preview": "AntCraft Tall (preview)",
+  "biome.antcraft.ember_rift": "Ember Rift",
   "antcraft.config.title": "AntCraft Settings",
   "antcraft.config.new_worlds": "Strip size (only for worlds created from now on)",
   "antcraft.config.strip_width": "Strip Width",

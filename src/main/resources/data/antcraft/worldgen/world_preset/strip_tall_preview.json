@@ -1,0 +1,51 @@
+{
+  "dimensions": {
+    "minecraft:overworld": {
+      "type": "antcraft:strip_overworld_tall",
+      "generator": {
+        "type": "antcraft:strip",
+        "size_from_config": true,
+        "layout": 2,
+        "base": {
+          "biome_source": {
+            "type": "antcraft:strip",
+            "base": {
+              "type": "minecraft:multi_noise",
+              "preset": "minecraft:overworld"
+            },
+            "layout": 2
+          },
+          "settings": "minecraft:overworld"
+        }
+      }
+    },
+    "minecraft:the_end": {
+      "type": "minecraft:the_end",
+      "generator": {
+        "type": "antcraft:end_strip",
+        "size_from_config": true,
+        "base": {
+          "biome_source": {
+            "type": "minecraft:the_end"
+          },
+          "settings": "minecraft:end"
+        }
+      }
+    },
+    "minecraft:the_nether": {
+      "type": "antcraft:strip_nether",
+      "generator": {
+        "type": "antcraft:nether_strip",
+        "size_from_config": true,
+        "layout": 2,
+        "base": {
+          "biome_source": {
+            "type": "minecraft:multi_noise",
+            "preset": "minecraft:nether"
+          },
+          "settings": "minecraft:nether"
+        }
+      }
+    }
+  }
+}

@@ -80,6 +80,12 @@ public final class DeepTerrain {
 		for (int layer = 1; layer <= layout.deepLayers; layer++) {
 			stones.add(layout.layer(layer).baseStone());
 			stones.add(layout.layer(layer).patchStone());
+			if (layout.id >= 2 && layout.layer(layer).theme() == LayerTheme.OCHRE_BADLANDS) stones.addAll(List.of(BADLANDS_BANDS));
+		}
+		if (layout.id >= 2) {
+			// soft or decorative patch blocks get no ores (layout 1 keeps its original stone set)
+			stones.removeIf(state -> state.is(Blocks.MOSS_BLOCK) || state.is(Blocks.PACKED_ICE) || state.is(Blocks.PALE_MOSS_BLOCK) || state.is(Blocks.MUD)
+				|| state.is(Blocks.AMETHYST_BLOCK) || state.is(Blocks.SCULK));
 		}
 		this.layerStones = stones.toArray(BlockState[]::new);
 		this.specs = new LayerSpec[layout.deepLayers + 1];
@@ -165,10 +171,16 @@ public final class DeepTerrain {
 	 * Village columns are flattened separately during terrain generation.
 	 */
 	public int surfaceAt(int layer, int x, int z) {
+		if (this.spec(layer).theme().isWater()) return this.forestSurface(layer, x, z); // a sea: no ponds
 		if (this.isPond(layer, x, z) || this.isPond(layer, x + 1, z) || this.isPond(layer, x - 1, z) || this.isPond(layer, x, z + 1) || this.isPond(layer, x, z - 1)) {
 			return this.pondLevel(layer);
 		}
 		return this.forestSurface(layer, x, z);
+	}
+
+	/** Water surface of a sea layer ({@link LayerTheme#isWater}): forest floor + 8. */
+	public int waterLine(int layer) {
+		return this.layout.forestFloor(layer) + 8;
 	}
 
 	/** Pond water level: the lowest the rolling forest floor can go, so ponds never spill over. */
@@ -204,13 +216,52 @@ public final class DeepTerrain {
 			case MUD_AND_GRASS -> n2(this.mud, layer, x, z, 0.08) > 0.0 ? Blocks.MUD.defaultBlockState() : Blocks.GRASS_BLOCK.defaultBlockState();
 			case MYCELIUM -> Blocks.MYCELIUM.defaultBlockState();
 			case GRASS -> Blocks.GRASS_BLOCK.defaultBlockState();
+			// tall layouts only
+			case PODZOL_MIX -> {
+				double m = n2(this.mud, layer, x, z, 0.08);
+				yield m > 0.3 ? Blocks.PODZOL.defaultBlockState() : m < -0.4 ? Blocks.COARSE_DIRT.defaultBlockState() : Blocks.GRASS_BLOCK.defaultBlockState();
+			}
+			case COARSE_MIX -> n2(this.mud, layer, x, z, 0.15) > 0.45 ? Blocks.COARSE_DIRT.defaultBlockState() : Blocks.GRASS_BLOCK.defaultBlockState();
+			case RED_SAND -> n2(this.mud, layer, x, z, 0.08) > 0.4 ? Blocks.COARSE_DIRT.defaultBlockState() : Blocks.RED_SAND.defaultBlockState();
+			case MOSS -> Blocks.MOSS_BLOCK.defaultBlockState();
+			case PALE_MOSS -> Blocks.PALE_MOSS_BLOCK.defaultBlockState();
+			case STONE_MIX -> n2(this.mud, layer, x, z, 0.08) > 0.2 ? Blocks.COARSE_DIRT.defaultBlockState() : Blocks.STONE.defaultBlockState();
+			case SCULK -> Blocks.SCULK.defaultBlockState();
+			case SNOW -> Blocks.SNOW_BLOCK.defaultBlockState();
+			case WARPED_NYLIUM -> Blocks.WARPED_NYLIUM.defaultBlockState();
 		};
 	}
+
+	/** What lies under the forest ground (surface-4 .. surface-1); layout 1: sand/sandstone, mud or dirt by theme. */
+	private BlockState subsoil(int layer, int y, int surface) {
+		LayerSpec spec = this.spec(layer);
+		LayerTheme theme = spec.theme();
+		if (theme.isDesert() || theme.isWater()) return y == surface - 1 ? Blocks.SAND.defaultBlockState() : Blocks.SANDSTONE.defaultBlockState();
+		if (theme.isSwamp()) return Blocks.MUD.defaultBlockState();
+		return switch (spec.ground()) {
+			case RED_SAND -> y == surface - 1 ? Blocks.RED_SAND.defaultBlockState() : Blocks.RED_SANDSTONE.defaultBlockState();
+			case STONE_MIX -> Blocks.STONE.defaultBlockState();
+			case SCULK -> DEEPSLATE;
+			case WARPED_NYLIUM -> Blocks.NETHERRACK.defaultBlockState();
+			default -> DIRT;
+		};
+	}
+
+	/** Terracotta band colours of the Ochre Badlands patches, two blocks each, repeating every 12 blocks of y. */
+	private static final BlockState[] BADLANDS_BANDS = {
+		Blocks.DYED_TERRACOTTA.pick(net.minecraft.world.item.DyeColor.ORANGE).defaultBlockState(),
+		Blocks.DYED_TERRACOTTA.pick(net.minecraft.world.item.DyeColor.YELLOW).defaultBlockState(),
+		Blocks.DYED_TERRACOTTA.pick(net.minecraft.world.item.DyeColor.RED).defaultBlockState(),
+		Blocks.DYED_TERRACOTTA.pick(net.minecraft.world.item.DyeColor.WHITE).defaultBlockState(),
+		Blocks.DYED_TERRACOTTA.pick(net.minecraft.world.item.DyeColor.LIGHT_GRAY).defaultBlockState(),
+		Blocks.DYED_TERRACOTTA.pick(net.minecraft.world.item.DyeColor.BROWN).defaultBlockState(),
+	};
 
 	private BlockState stoneAt(int layer, int x, int y, int z) {
 		double p = this.patch.get(x * 0.05, y * 0.07, z * 0.05);
 		LayerSpec spec = this.spec(layer);
-		return p > spec.patchThreshold() ? spec.patchStone() : spec.baseStone();
+		if (p <= spec.patchThreshold()) return spec.baseStone();
+		return spec.theme() == LayerTheme.OCHRE_BADLANDS ? BADLANDS_BANDS[Math.floorMod(y, 12) / 2] : spec.patchStone();
 	}
 
 	private boolean carvedCave(int layer, int x, int y, int z) {
@@ -277,6 +328,14 @@ public final class DeepTerrain {
 		LayerTheme theme = spec.theme();
 		int bottom = this.layout.layerBottom(layer);
 		int top = this.layout.layerTop(layer);
+		if (theme.isSolid()) {
+			// the Trial Vault: solid layer stone, no caves, hall, forest, pillars or puddles
+			for (int y = bottom; y <= top; y++) set(chunk, lx, y, lz, this.stoneAt(layer, x, y, z));
+			return;
+		}
+		// the Sunken Reef: the forest band is a sea up to forest floor + 8, sealed below
+		boolean sea = theme.isWater();
+		int waterLine = this.waterLine(layer);
 		int hallTop = bottom + this.layout.hallHeight - 1;
 		boolean pillar = this.isPillar(layer, x, z);
 
@@ -295,7 +354,7 @@ public final class DeepTerrain {
 		}
 
 		// villages get a flat floor without ponds (it's what their layout was computed against)
-		boolean pond = !village && this.isPond(layer, x, z);
+		boolean pond = !village && !sea && this.isPond(layer, x, z);
 		int surface = village ? forestFloor : this.surfaceAt(layer, x, z);
 		int ceil = this.forestCeiling(layer, x, z);
 		double pondDepth = this.pondValue(layer, x, z);
@@ -305,7 +364,7 @@ public final class DeepTerrain {
 		double glowThreshold = theme.isDesert() ? 0.35 : 0.55;
 		double hangThreshold = theme.isDesert() ? 0.6 : 0.75;
 		// no noodle tunnels right under or next to pond water, or the pond would drain
-		boolean nearPond = pond || this.isPond(layer, x + 1, z) || this.isPond(layer, x - 1, z) || this.isPond(layer, x, z + 1) || this.isPond(layer, x, z - 1);
+		boolean nearPond = !sea && (pond || this.isPond(layer, x + 1, z) || this.isPond(layer, x - 1, z) || this.isPond(layer, x, z + 1) || this.isPond(layer, x, z - 1));
 		int pondLevel = this.pondLevel(layer);
 		double fluidValue = n2(this.fluid, layer, x, z, 0.04);
 		BlockState puddle = spec.puddle() == LayerSpec.Puddle.WATER_OR_LAVA ? (fluidValue > 0.0 ? WATER : LAVA) : LAVA;
@@ -334,15 +393,19 @@ public final class DeepTerrain {
 					state = spec.pondBottom();
 				} else if (y == surface) {
 					state = ground;
-				} else if (theme.isDesert()) {
-					state = y == surface - 1 ? Blocks.SAND.defaultBlockState() : Blocks.SANDSTONE.defaultBlockState();
 				} else {
-					state = theme.isSwamp() ? Blocks.MUD.defaultBlockState() : DIRT;
+					state = this.subsoil(layer, y, surface);
 				}
-				// tunnels from the caves may open into the forest floor (but not under a pond)
+				// tunnels from the caves may open into the forest floor (but not under a pond or the sea)
 				boolean pondZone = nearPond && y >= pondLevel - 4;
-				if (y < surface - 1 && !pondZone && !theme.isDesert() && this.noodleOnly(x, y, z)) state = AIR;
+				if (y < surface - 1 && !pondZone && !theme.isDesert() && !sea && this.noodleOnly(x, y, z)) state = AIR;
 			} else if (y > surface && y < ceil) {
+				if (sea && y <= waterLine) {
+					// enclosed by the seabed, the walls and air: no fluid tick needed (raw write)
+					chunk.getSection(chunk.getSectionIndex(y)).setBlockState(lx, y & 15, lz, WATER, false);
+					below = false;
+					continue;
+				}
 				state = AIR;
 			} else if (y >= ceil && y <= ceil + 2) {
 				if (y == ceil && glowValue > glowThreshold) {
@@ -354,7 +417,8 @@ public final class DeepTerrain {
 				// cave stone
 				boolean nearForest = y >= surface - 9 && y <= ceil + 6;
 				boolean pondZone = nearPond && y >= pondLevel - 6 && y <= pondLevel + 1;
-				boolean carved = pondZone ? false : nearForest ? this.noodleOnly(x, y, z) : this.carvedCave(layer, x, y, z);
+				// under the sea nothing is carved within 9 blocks of the seabed, or the sea would drain
+				boolean carved = pondZone || (sea && nearForest && y < surface) ? false : nearForest ? this.noodleOnly(x, y, z) : this.carvedCave(layer, x, y, z);
 				if (carved) {
 					state = below && puddleColumn && !nearForest ? puddle : AIR;
 				} else {
@@ -424,6 +488,10 @@ public final class DeepTerrain {
 	 * tree or a house moves to the nearest free one instead of leaving a dark patch.
 	 */
 	private void placeGridLight(WorldGenLevel level, BlockPos.MutableBlockPos at, int x, int z, int ground) {
+		this.placeGridLight(level, at, x, z, ground, false);
+	}
+
+	private void placeGridLight(WorldGenLevel level, BlockPos.MutableBlockPos at, int x, int z, int ground, boolean underwater) {
 		// already lit (generation, or an earlier upgrade): nothing to do
 		for (int dy : LIGHT_HEIGHTS) {
 			for (int[] o : LIGHT_SPOTS) {
@@ -434,8 +502,13 @@ public final class DeepTerrain {
 			for (int[] o : LIGHT_SPOTS) {
 				int px = x + o[0], pz = z + o[1];
 				if (!this.bounds.inside(px, pz)) continue;
-				if (level.getBlockState(at.set(px, ground + dy, pz)).isAir()) {
+				BlockState here = level.getBlockState(at.set(px, ground + dy, pz));
+				if (here.isAir()) {
 					level.setBlock(at, LIGHT_15, Block.UPDATE_CLIENTS);
+					return;
+				}
+				if (underwater && here.is(Blocks.WATER) && here.getFluidState().isSource()) {
+					level.setBlock(at, LIGHT_15.setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.WATERLOGGED, true), Block.UPDATE_CLIENTS);
 					return;
 				}
 			}
@@ -455,8 +528,9 @@ public final class DeepTerrain {
 			for (int z = Math.max(pos.getMinBlockZ(), this.bounds.minZ()); z <= Math.min(pos.getMaxBlockZ(), this.bounds.maxZ()); z++) {
 				if (Math.floorMod(x, 4) != 1 || Math.floorMod(z, 4) != 1) continue;
 				for (int layer = 1; layer <= this.layout.deepLayers; layer++) {
+					if (!this.spec(layer).hasForest()) continue;
 					int ground = UndergroundForest.inVillage(this.layout, deepPieces, layer, x, z, 3) ? this.layout.forestFloor(layer) : this.surfaceAt(layer, x, z);
-					this.placeGridLight(level, at, x, z, ground);
+					this.placeGridLight(level, at, x, z, ground, this.spec(layer).theme().isWater());
 				}
 			}
 		}
@@ -493,6 +567,7 @@ public final class DeepTerrain {
 		for (int x = Math.max(pos.getMinBlockX(), this.bounds.minX()); x <= Math.min(pos.getMaxBlockX(), this.bounds.maxX()); x++) {
 			for (int z = Math.max(pos.getMinBlockZ(), this.bounds.minZ()); z <= Math.min(pos.getMaxBlockZ(), this.bounds.maxZ()); z++) {
 				for (int layer = 1; layer <= this.layout.deepLayers; layer++) {
+					if (!this.spec(layer).hasForest()) continue;
 					int surface = this.surfaceAt(layer, x, z);
 					BlockState plant = this.plantFor(level, layer, x, z, surface);
 					if (plant != null && plant.is(Blocks.CACTUS)) {
@@ -516,7 +591,7 @@ public final class DeepTerrain {
 					if (Math.floorMod(x, 4) == 1 && Math.floorMod(z, 4) == 1) {
 						// villages stand on a flattened floor, not the natural forest surface
 						int ground = UndergroundForest.inVillage(this.layout, deepPieces, layer, x, z, 3) ? this.layout.forestFloor(layer) : surface;
-						this.placeGridLight(level, at, x, z, ground);
+						this.placeGridLight(level, at, x, z, ground, this.spec(layer).theme().isWater());
 					}
 				}
 			}
@@ -541,7 +616,7 @@ public final class DeepTerrain {
 			for (int z = minZ; z <= maxZ; z++) {
 				if (Math.floorMod(z - this.bounds.minZ() - 3, VINE_SPACING) >= VINE_WIDTH) continue;
 				for (int layer = 1; layer <= this.layout.deepLayers; layer++) {
-					if (UndergroundForest.inVillage(this.layout, deepPieces, layer, x, z, 1)) continue;
+					if (!this.spec(layer).hasForest() || UndergroundForest.inVillage(this.layout, deepPieces, layer, x, z, 1)) continue;
 					int surface = this.surfaceAt(layer, x, z);
 					for (int y = this.forestCeiling(layer, x, z) - 1; y > surface; y--) {
 						if (level.getBlockState(at.set(x, y, z)).isAir()) level.setBlock(at, vine, Block.UPDATE_CLIENTS);
@@ -568,6 +643,21 @@ public final class DeepTerrain {
 			case CHERRY -> r < 0.2 ? Blocks.SHORT_GRASS.defaultBlockState() : r < 0.3 ? Blocks.PINK_PETALS.defaultBlockState() : null;
 			case MEADOW -> r < 0.3 ? Blocks.SHORT_GRASS.defaultBlockState() : r < 0.33 ? Blocks.POPPY.defaultBlockState() : r < 0.36 ? Blocks.DANDELION.defaultBlockState()
 				: r < 0.37 ? Blocks.CORNFLOWER.defaultBlockState() : null;
+			// tall layouts only
+			case AUTUMN -> r < 0.15 ? Blocks.LEAF_LITTER.defaultBlockState() : r < 0.21 ? Blocks.WILDFLOWERS.defaultBlockState() : r < 0.25 ? Blocks.BUSH.defaultBlockState()
+				: r < 0.27 ? Blocks.FIREFLY_BUSH.defaultBlockState() : r < 0.37 ? Blocks.SHORT_GRASS.defaultBlockState() : null;
+			case BADLANDS -> ground.is(Blocks.COARSE_DIRT) ? (r < 0.1 ? Blocks.SHORT_DRY_GRASS.defaultBlockState() : null)
+				: r < 0.04 ? Blocks.DEAD_BUSH.defaultBlockState() : r < 0.1 ? Blocks.SHORT_DRY_GRASS.defaultBlockState() : r < 0.115 ? Blocks.CACTUS.defaultBlockState() : null;
+			case DARKWOOD -> r < 0.04 ? Blocks.BROWN_MUSHROOM.defaultBlockState() : r < 0.07 ? Blocks.RED_MUSHROOM.defaultBlockState() : r < 0.2 ? Blocks.MOSS_CARPET.defaultBlockState()
+				: r < 0.35 ? Blocks.SHORT_GRASS.defaultBlockState() : null;
+			case LUSH -> r < 0.2 ? Blocks.MOSS_CARPET.defaultBlockState() : r < 0.24 ? Blocks.AZALEA.defaultBlockState() : r < 0.26 ? Blocks.FLOWERING_AZALEA.defaultBlockState()
+				: r < 0.36 ? Blocks.SHORT_GRASS.defaultBlockState() : null;
+			case JUNGLE -> r < 0.25 ? Blocks.FERN.defaultBlockState() : r < 0.32 ? Blocks.SHORT_GRASS.defaultBlockState() : r < 0.33 ? Blocks.MELON.defaultBlockState() : null;
+			case SAVANNA -> r < 0.3 ? Blocks.SHORT_GRASS.defaultBlockState() : r < 0.42 ? Blocks.SHORT_DRY_GRASS.defaultBlockState() : null;
+			case PALE -> r < 0.12 ? Blocks.PALE_MOSS_CARPET.defaultBlockState() : r < 0.15 ? Blocks.CLOSED_EYEBLOSSOM.defaultBlockState() : r < 0.17 ? Blocks.OPEN_EYEBLOSSOM.defaultBlockState() : null;
+			case CRAGS -> ground.is(Blocks.COARSE_DIRT) ? (r < 0.25 ? Blocks.SHORT_GRASS.defaultBlockState() : r < 0.3 ? Blocks.AZURE_BLUET.defaultBlockState() : null) : null;
+			case EMBER -> r < 0.15 ? Blocks.WARPED_ROOTS.defaultBlockState() : r < 0.25 ? Blocks.NETHER_SPROUTS.defaultBlockState() : null;
+			case NONE -> null;
 		};
 	}
 
@@ -608,6 +698,13 @@ public final class DeepTerrain {
 				setIfInChunk(chunk, pos, hx, y, hz, ladder);
 			}
 
+			if (this.layout.isVault(k)) {
+				// the floor under the Trial Vault: no hall above it, only the end of the vault passage
+				for (int y = floorTop + 1; y <= floorTop + 2; y++) setIfInChunk(chunk, pos, hx, y, hz, AIR);
+				this.cutHolePool(chunk, pos, layerBelow, hx, hz);
+				continue;
+			}
+
 			// light up the hall where you step onto the ladder: a glowstone patch in the hall ceiling
 			// above the hole and four lanterns around it
 			int ceiling = floorTop + 1 + this.layout.hallHeight;
@@ -643,6 +740,37 @@ public final class DeepTerrain {
 				setIfInChunk(chunk, pos, hx, y, hz, AIR);
 			}
 		}
+		if (this.layout.vaultLayer >= 1) this.cutVaultPassage(chunk, pos);
+	}
+
+	/**
+	 * Temporary (until the Trial Vault structure exists): a plain way through the solid vault layer.
+	 * A ladder shaft from the landing room under the floor above the vault straight down to the
+	 * vault's bottom rows, then a 2-high tunnel along x and then z to the hole of the floor below
+	 * (whose ladder runs through that floor as on every floor), lit by invisible lights.
+	 */
+	private void cutVaultPassage(ChunkAccess chunk, ChunkPos pos) {
+		int vault = this.layout.vaultLayer;
+		int ax = this.layout.holeX(this.seed, vault - 1, this.bounds), az = this.layout.holeZ(this.seed, vault - 1, this.bounds);
+		int bx = this.layout.holeX(this.seed, vault, this.bounds), bz = this.layout.holeZ(this.seed, vault, this.bounds);
+		int bottom = this.layout.layerBottom(vault);
+		int top = this.layout.floorBase(vault - 1) - 4; // the landing room's floor
+		// the ladder hangs on the block to its south, unless the tunnel leaves the shaft southwards
+		boolean southOpen = ax == bx && bz > az;
+		BlockState ladder = Blocks.LADDER.defaultBlockState().setValue(LadderBlock.FACING, Direction.NORTH);
+		BlockState ladderLow = southOpen ? Blocks.LADDER.defaultBlockState().setValue(LadderBlock.FACING, Direction.SOUTH) : ladder;
+		for (int y = bottom + 2; y <= top; y++) setIfInChunk(chunk, pos, ax, y, az, ladder);
+		for (int y = bottom; y <= bottom + 1; y++) setIfInChunk(chunk, pos, ax, y, az, ladderLow);
+		// the tunnel: x first (at az), then z (at bx)
+		int step = 0;
+		int dx = Integer.signum(bx - ax), dz = Integer.signum(bz - az);
+		for (int x = ax + dx; dx != 0 && x != bx + dx; x += dx) this.cutPassageCell(chunk, pos, x, az, bottom, step++);
+		for (int z = az + dz; dz != 0 && z != bz + dz; z += dz) this.cutPassageCell(chunk, pos, bx, z, bottom, step++);
+	}
+
+	private void cutPassageCell(ChunkAccess chunk, ChunkPos pos, int x, int z, int bottom, int step) {
+		setIfInChunk(chunk, pos, x, bottom, z, AIR);
+		setIfInChunk(chunk, pos, x, bottom + 1, z, step % 8 == 3 ? LIGHT_15 : AIR);
 	}
 
 	/**
@@ -689,6 +817,8 @@ public final class DeepTerrain {
 	 * columns around it get a rim so the water stays in. Trees and plants skip water columns.
 	 */
 	private void cutHolePool(ChunkAccess chunk, ChunkPos pos, int layer, int hx, int hz) {
+		// no forest (the vault) or the forest is a sea: nothing to cut
+		if (!this.spec(layer).hasForest() || this.spec(layer).theme().isWater()) return;
 		int top = this.surfaceAt(layer, hx, hz);
 		boolean desert = this.spec(layer).theme().isDesert();
 		BlockState rim = desert ? Blocks.SANDSTONE.defaultBlockState() : DIRT;
@@ -781,6 +911,7 @@ public final class DeepTerrain {
 		int[] queue = new int[dist.length];
 		BlockPos.MutableBlockPos at = new BlockPos.MutableBlockPos();
 		for (int layer = 1; layer <= this.layout.deepLayers; layer++) {
+			if (!this.spec(layer).hasForest()) continue;
 			int y0 = Math.max(this.layout.forestFloor(layer) - LEAF_BAND_BELOW, this.layout.layerBottom(layer));
 			int y1 = Math.min(this.layout.forestFloor(layer) + leafBandAbove, this.layout.layerTop(layer));
 			int head = 0, tail = 0;

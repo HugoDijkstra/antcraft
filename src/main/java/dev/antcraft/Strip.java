@@ -41,7 +41,7 @@ public final class Strip {
 	 */
 	public static @Nullable StripLayout layout(Level level) {
 		if (level instanceof ServerLevel server) return layout(server.getChunkSource().getGenerator());
-		return level.dimensionTypeRegistration().is(TALL_OVERWORLD_TYPE) ? StripLayout.byId(StripLayout.LATEST) : StripLayout.LAYOUT_1;
+		return level.dimensionTypeRegistration().is(TALL_OVERWORLD_TYPE) ? StripLayout.LAYOUT_2 : StripLayout.LAYOUT_1;
 	}
 
 	public static @Nullable StripLayout layout(ChunkGenerator generator) {

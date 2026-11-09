@@ -34,6 +34,8 @@ public final class SelfCheck {
 			Commands.literal("antcraft")
 				.requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
 				.then(Commands.literal("selfcheck").executes(SelfCheck::run))
+				.then(Commands.literal("audit").requires(source -> StructureAudit.enabled())
+					.then(Commands.literal("structures").executes(StructureAudit::run)))
 		));
 	}
 
@@ -157,10 +159,34 @@ public final class SelfCheck {
 					for (int k : layout.guardianFloors()) this.checkBossRoom(layout, k);
 					this.checkLeaves(layout, strip);
 					this.checkPortalRoom(layout);
+					if (layout.id >= 2) this.checkLayerTable(layout);
 				}
 			}
 			this.checkWallsAndOutside(kind);
 			if (kind == ChunkGeneratorKind.NETHER) this.checkShrine(((NetherStripChunkGenerator) this.level.getChunkSource().getGenerator()).layout());
+		}
+
+		// ------------------------------------------------------------------ the layer table (tall layouts)
+
+		/**
+		 * Spec v2 3.2 and 2.4: no two rows share a (base, patch) pair, a forest biome or a non-empty tree
+		 * list; no frozen or reef layer holds the vanilla igloo / ocean ruin placeholder heights (y 50..90).
+		 */
+		private void checkLayerTable(StripLayout layout) {
+			List<String> bad = new ArrayList<>();
+			java.util.Set<String> pairs = new java.util.HashSet<>();
+			java.util.Set<Object> biomes = new java.util.HashSet<>(), trees = new java.util.HashSet<>();
+			for (int l = 1; l <= layout.deepLayers; l++) {
+				LayerSpec row = layout.layer(l);
+				if (!pairs.add(row.baseStone() + "/" + row.patchStone())) bad.add("L" + l + " stones");
+				if (!biomes.add(row.forestBiome())) bad.add("L" + l + " forest biome");
+				if (!row.trees().isEmpty() && !trees.add(row.trees())) bad.add("L" + l + " trees");
+			}
+			for (int y = 50; y <= 90; y++) {
+				int l = layout.layerAt(y);
+				if (l >= 1 && (layout.layer(l).theme() == LayerTheme.FROZEN_DEPTHS || layout.layer(l).theme() == LayerTheme.SUNKEN_REEF)) bad.add("y " + y + " in L" + l);
+			}
+			this.report("layer table", bad.isEmpty(), layout.deepLayers + " rows distinct, placeholder band y 50..90 clear" + (bad.isEmpty() ? "" : "; bad " + bad));
 		}
 
 		// ------------------------------------------------------------------ floors and seals

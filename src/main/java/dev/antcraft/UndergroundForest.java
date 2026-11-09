@@ -52,16 +52,20 @@ public final class UndergroundForest {
 		return choices.getFirst().feature();
 	}
 
-	private static boolean isGround(BlockState state) {
-		return state.is(Blocks.GRASS_BLOCK) || state.is(Blocks.MOSS_BLOCK) || state.is(Blocks.MUD) || state.is(Blocks.MYCELIUM) || state.is(Blocks.DIRT)
-			|| state.is(Blocks.SAND);
+	private static boolean isGround(BlockState state, StripLayout layout) {
+		if (state.is(Blocks.GRASS_BLOCK) || state.is(Blocks.MOSS_BLOCK) || state.is(Blocks.MUD) || state.is(Blocks.MYCELIUM) || state.is(Blocks.DIRT)
+			|| state.is(Blocks.SAND)) return true;
+		// the grounds of the tall layouts' forests (layout 1 keeps its original set: a mega spruce's
+		// podzol, for example, must stay tree-free there)
+		return layout.id >= 2 && (state.is(Blocks.WARPED_NYLIUM) || state.is(Blocks.PALE_MOSS_BLOCK) || state.is(Blocks.RED_SAND) || state.is(Blocks.PODZOL)
+			|| state.is(Blocks.SNOW_BLOCK) || state.is(Blocks.COARSE_DIRT) || state.is(Blocks.STONE));
 	}
 
 	/** Finds the forest floor in a column: the ground block with air (or a plant) on top, or null. */
 	private static BlockPos findGround(WorldGenLevel level, DeepTerrain terrain, int layer, int x, int z) {
 		int surface = terrain.surfaceAt(layer, x, z);
 		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(x, surface, z);
-		if (!isGround(level.getBlockState(pos))) return null;
+		if (!isGround(level.getBlockState(pos), terrain.layout())) return null;
 		BlockState above = level.getBlockState(pos.above());
 		if (!above.isAir() && !above.canBeReplaced()) return null;
 		return pos.immutable();
@@ -80,6 +84,7 @@ public final class UndergroundForest {
 
 		for (int layer = 1; layer <= layout.deepLayers; layer++) {
 			LayerSpec spec = layout.layer(layer);
+			if (!spec.hasForest()) continue;
 			if (spec.theme().isDesert()) {
 				placeDesertWell(level, generator, terrain, deepPieces, random, layer, minX, maxX, minZ, maxZ);
 				continue;
@@ -96,6 +101,8 @@ public final class UndergroundForest {
 				if (terrain.nearHoleAbove(layer, x, z, 4)) continue;
 				BlockPos ground = findGround(level, terrain, layer, x, z);
 				if (ground == null) continue;
+				// under the sea (no islands yet); tall layouts only, so layout 1 keeps its original placement
+				if (layout.id >= 2 && !level.getFluidState(ground.above()).isEmpty()) continue;
 				Holder<Feature> feature = features.get(key).orElse(null);
 				if (feature == null) continue;
 				BlockPos sapling = ground.above();
@@ -145,12 +152,15 @@ public final class UndergroundForest {
 		StripLayout layout = terrain.layout();
 
 		for (int layer = 1; layer <= layout.deepLayers; layer++) {
+			if (!layout.layer(layer).hasForest()) continue;
 			if (random.nextFloat() > 0.6F) continue;
 			EntityType<? extends Mob> type = switch (layout.layer(layer).animals()) {
 				case MOOSHROOM -> EntityTypes.MOOSHROOM;
 				case DESERT -> random.nextFloat() < 0.2F ? EntityTypes.CAMEL : EntityTypes.RABBIT;
 				case FARM -> ANIMALS.get(random.nextInt(ANIMALS.size()));
+				case NONE -> null;
 			};
+			if (type == null) continue;
 			int count = type == EntityTypes.CAMEL ? 1 : 2 + random.nextInt(3);
 			for (int i = 0; i < count; i++) {
 				int x = minX + random.nextInt(maxX - minX + 1);
