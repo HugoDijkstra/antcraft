@@ -1,0 +1,27 @@
+{
+  "parent": "antcraft:end_underside",
+  "display": {
+    "icon": {
+      "id": "minecraft:phantom_membrane"
+    },
+    "title": {
+      "translate": "advancements.antcraft.guardian_phantom_matriarch.title",
+      "fallback": "Sleep Well"
+    },
+    "description": {
+      "translate": "advancements.antcraft.guardian_phantom_matriarch.description",
+      "fallback": "Defeat the Phantom Matriarch at the Void Root"
+    },
+    "frame": "challenge"
+  },
+  "criteria": {
+    "defeated": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "defeated"
+    ]
+  ]
+}

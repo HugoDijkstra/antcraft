@@ -1,0 +1,27 @@
+{
+  "parent": "antcraft:end_ascent",
+  "display": {
+    "icon": {
+      "id": "minecraft:ender_eye"
+    },
+    "title": {
+      "translate": "advancements.antcraft.guardian_void_stalker.title",
+      "fallback": "Stalker Stalked"
+    },
+    "description": {
+      "translate": "advancements.antcraft.guardian_void_stalker.description",
+      "fallback": "Defeat the Void Stalker in the Barren Reach"
+    },
+    "frame": "challenge"
+  },
+  "criteria": {
+    "defeated": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "defeated"
+    ]
+  ]
+}

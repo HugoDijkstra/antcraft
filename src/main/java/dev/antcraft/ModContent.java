@@ -16,7 +16,7 @@ import net.minecraft.world.level.material.MapColor;
 /**
  * AntCraft's own blocks and items: the seals on the floor holes (layout 1: Nether Seal on floor 4,
  * Ancient Seal on floor 7, Guardian Seals on the boss-room floors 0, 2 and 6; tall worlds add the
- * Ember Seal), the boss rooms' gates, and the keys.
+ * Ember Seal; the tall End adds the Void Seal of the Crown Vault), the boss rooms' gates, and the keys.
  */
 public final class ModContent {
 	private ModContent() {}
@@ -43,6 +43,14 @@ public final class ModContent {
 		"opened_ember_seal"
 	);
 
+	/** Tall End: the door of the Crown Vault, opened by the Void Key from the Phantom Matriarch's arena (U4). */
+	public static final ResourceKey<Block> VOID_SEAL_KEY = blockKey("void_seal");
+	public static final Block VOID_SEAL = new VoidSealBlock(
+		unbreakable(VOID_SEAL_KEY).mapColor(MapColor.COLOR_PURPLE).sound(SoundType.AMETHYST).lightLevel(state -> 10),
+		() -> ModContent.VOID_KEY,
+		"opened_void_seal"
+	);
+
 	public static final ResourceKey<Block> GUARDIAN_SEAL_KEY = blockKey("guardian_seal");
 	public static final Block GUARDIAN_SEAL = new SealBlock(
 		unbreakable(GUARDIAN_SEAL_KEY).mapColor(MapColor.COLOR_RED).sound(SoundType.POLISHED_DEEPSLATE).lightLevel(state -> 9),
@@ -65,6 +73,7 @@ public final class ModContent {
 	public static final Item NETHER_SEAL_ITEM = blockItem(NETHER_SEAL_KEY, NETHER_SEAL);
 	public static final Item ANCIENT_SEAL_ITEM = blockItem(ANCIENT_SEAL_KEY, ANCIENT_SEAL);
 	public static final Item EMBER_SEAL_ITEM = blockItem(EMBER_SEAL_KEY, EMBER_SEAL);
+	public static final Item VOID_SEAL_ITEM = blockItem(VOID_SEAL_KEY, VOID_SEAL);
 	public static final Item GUARDIAN_SEAL_ITEM = blockItem(GUARDIAN_SEAL_KEY, GUARDIAN_SEAL);
 	public static final Item ARENA_GATE_ITEM = blockItem(ARENA_GATE_KEY, ARENA_GATE);
 	public static final Item TELEPORTER_ITEM = blockItem(TELEPORTER_KEY, TELEPORTER);
@@ -77,6 +86,9 @@ public final class ModContent {
 
 	public static final ResourceKey<Item> EMBER_KEY_KEY = ResourceKey.create(Registries.ITEM, id("ember_key"));
 	public static final Item EMBER_KEY = new Item(new Item.Properties().setId(EMBER_KEY_KEY).stacksTo(1).rarity(Rarity.EPIC).fireResistant());
+
+	public static final ResourceKey<Item> VOID_KEY_KEY = ResourceKey.create(Registries.ITEM, id("void_key"));
+	public static final Item VOID_KEY = new Item(new Item.Properties().setId(VOID_KEY_KEY).stacksTo(1).rarity(Rarity.EPIC).fireResistant());
 
 	private static Identifier id(String path) {
 		return Identifier.fromNamespaceAndPath(AntCraft.MOD_ID, path);
@@ -112,6 +124,10 @@ public final class ModContent {
 		Registry.register(BuiltInRegistries.ITEM, NETHER_KEY_KEY, NETHER_KEY);
 		Registry.register(BuiltInRegistries.ITEM, ANCIENT_KEY_KEY, ANCIENT_KEY);
 		Registry.register(BuiltInRegistries.ITEM, EMBER_KEY_KEY, EMBER_KEY);
+		// tall End (appended, so the earlier entries keep their order)
+		Registry.register(BuiltInRegistries.BLOCK, VOID_SEAL_KEY, VOID_SEAL);
+		registerBlockItem(VOID_SEAL_KEY, VOID_SEAL_ITEM);
+		Registry.register(BuiltInRegistries.ITEM, VOID_KEY_KEY, VOID_KEY);
 	}
 
 	private static void registerBlockItem(ResourceKey<Block> blockKey, Item item) {

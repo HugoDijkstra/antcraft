@@ -10,4 +10,8 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 public interface TemplateStructurePieceAccessor {
 	@Accessor("templatePosition")
 	BlockPos antcraft$templatePosition();
+
+	/** The template's name (the tall End's tier cities look for the "ship"). */
+	@Accessor("templateName")
+	String antcraft$templateName();
 }

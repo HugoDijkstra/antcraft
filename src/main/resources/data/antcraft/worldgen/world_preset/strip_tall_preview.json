@@ -20,13 +20,18 @@
       }
     },
     "minecraft:the_end": {
-      "type": "minecraft:the_end",
+      "type": "antcraft:strip_end_tall",
       "generator": {
         "type": "antcraft:end_strip",
         "size_from_config": true,
+        "layout": 2,
         "base": {
           "biome_source": {
-            "type": "minecraft:the_end"
+            "type": "antcraft:end_strip",
+            "base": {
+              "type": "minecraft:the_end"
+            },
+            "layout": 2
           },
           "settings": "minecraft:end"
         }

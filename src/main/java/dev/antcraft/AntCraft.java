@@ -41,11 +41,13 @@ public final class AntCraft implements ModInitializer {
 		Registry.register(BuiltInRegistries.CHUNK_GENERATOR, Identifier.fromNamespaceAndPath(MOD_ID, "end_strip"), EndStripChunkGenerator.CODEC);
 		Registry.register(BuiltInRegistries.BIOME_SOURCE, Identifier.fromNamespaceAndPath(MOD_ID, "strip"), StripBiomeSource.CODEC);
 		Registry.register(BuiltInRegistries.BIOME_SOURCE, Identifier.fromNamespaceAndPath(MOD_ID, "nether_strip"), NetherStripBiomeSource.CODEC);
+		Registry.register(BuiltInRegistries.BIOME_SOURCE, Identifier.fromNamespaceAndPath(MOD_ID, "end_strip"), EndStripBiomeSource.CODEC);
 		ModContent.register();
 		WorldUpgrade.register();
 		MiningHardness.register();
 		LayerTracker.register();
 		ArenaManager.register();
+		EndArenas.register();
 		SelfCheck.register();
 		TallAdvancements.register();
 
@@ -92,6 +94,14 @@ public final class AntCraft implements ModInitializer {
 	 * level.dat pairs them wrongly would generate broken terrain: refuse to load it.
 	 */
 	private static void checkLayoutHeight(ServerLevel level) {
+		if (level.getChunkSource().getGenerator() instanceof EndStripChunkGenerator end) {
+			EndLayout e = end.endLayout();
+			if (e.tall && (level.getMinY() != e.worldMinY || level.getMaxY() != e.worldMaxY)) {
+				throw new IllegalStateException("AntCraft End layout " + e.id + " needs dimension type antcraft:strip_end_tall (y " + e.worldMinY + ".." + e.worldMaxY
+					+ "), but " + level.dimension().identifier() + " has y " + level.getMinY() + ".." + level.getMaxY());
+			}
+			return;
+		}
 		if (level.getChunkSource().getGenerator() instanceof NetherStripChunkGenerator nether) {
 			NetherLayout n = nether.netherLayout();
 			if (n.tall() && (level.getMinY() != n.worldMinY || level.getMaxY() != n.worldMaxY)) {

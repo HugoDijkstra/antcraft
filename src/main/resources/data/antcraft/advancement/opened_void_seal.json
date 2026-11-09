@@ -1,0 +1,27 @@
+{
+  "parent": "antcraft:crown_of_the_end",
+  "display": {
+    "icon": {
+      "id": "minecraft:beacon"
+    },
+    "title": {
+      "translate": "advancements.antcraft.opened_void_seal.title",
+      "fallback": "The Crown Vault"
+    },
+    "description": {
+      "translate": "advancements.antcraft.opened_void_seal.description",
+      "fallback": "Open the Void Seal of the Crown Vault with the Void Key"
+    },
+    "frame": "goal"
+  },
+  "criteria": {
+    "opened": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "opened"
+    ]
+  ]
+}

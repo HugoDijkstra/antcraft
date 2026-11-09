@@ -1,0 +1,26 @@
+{
+  "parent": "antcraft:enter_end",
+  "display": {
+    "icon": {
+      "id": "minecraft:crying_obsidian"
+    },
+    "title": {
+      "translate": "advancements.antcraft.end_underside.title",
+      "fallback": "The Underside"
+    },
+    "description": {
+      "translate": "advancements.antcraft.end_underside.description",
+      "fallback": "Take the Descent Gate down below the End"
+    }
+  },
+  "criteria": {
+    "reached": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "reached"
+    ]
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "parent": "antcraft:enter_end",
+  "display": {
+    "icon": {
+      "id": "minecraft:chorus_flower"
+    },
+    "title": {
+      "translate": "advancements.antcraft.end_ascent.title",
+      "fallback": "The Ascent"
+    },
+    "description": {
+      "translate": "advancements.antcraft.end_ascent.description",
+      "fallback": "Take the Ascent Gate up into the islands above the End"
+    }
+  },
+  "criteria": {
+    "reached": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "reached"
+    ]
+  ]
+}

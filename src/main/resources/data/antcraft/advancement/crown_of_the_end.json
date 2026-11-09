@@ -1,0 +1,27 @@
+{
+  "parent": "antcraft:guardian_void_stalker",
+  "display": {
+    "icon": {
+      "id": "minecraft:dragon_head"
+    },
+    "title": {
+      "translate": "advancements.antcraft.crown_of_the_end.title",
+      "fallback": "Crown of the End"
+    },
+    "description": {
+      "translate": "advancements.antcraft.crown_of_the_end.description",
+      "fallback": "Reach the Crown at the top of the Ascent"
+    },
+    "frame": "challenge"
+  },
+  "criteria": {
+    "reached": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "reached"
+    ]
+  ]
+}

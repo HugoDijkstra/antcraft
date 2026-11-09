@@ -50,7 +50,7 @@ public class SealBlock extends Block {
 			return InteractionResult.TRY_WITH_EMPTY_HAND;
 		}
 		if (!level.isClientSide()) {
-			open(level, pos);
+			this.openWithKey(level, pos);
 			stack.consume(1, player);
 			player.sendOverlayMessage(Component.translatable(this.getDescriptionId() + ".opened"));
 			if (this.advancement != null && player instanceof ServerPlayer serverPlayer) LayerTracker.award(serverPlayer, this.advancement, "opened");
@@ -68,6 +68,11 @@ public class SealBlock extends Block {
 			player.sendOverlayMessage(Component.translatable(this.getDescriptionId() + ".locked"));
 		}
 		return InteractionResult.SUCCESS;
+	}
+
+	/** What the key does: the seal becomes the ladder of its hole ({@link VoidSealBlock}: a doorway). */
+	protected void openWithKey(Level level, BlockPos pos) {
+		open(level, pos);
 	}
 
 	/** Turns the seal at {@code pos} into the ladder of the hole (it hangs on the bedrock to its south). */

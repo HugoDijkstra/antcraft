@@ -15,6 +15,7 @@
 		"DragonRespawnMixin",
 		"EndGatewayMixin",
 		"EndPortalSpawnMixin",
+		"EndSpikeClampMixin",
 		"EndSpikeMixin",
 		"EnderDragonFightMixin",
 		"EnderDragonPathMixin",

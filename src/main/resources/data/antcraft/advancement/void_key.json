@@ -1,0 +1,33 @@
+{
+  "parent": "antcraft:guardian_phantom_matriarch",
+  "display": {
+    "icon": {
+      "id": "antcraft:void_key"
+    },
+    "title": {
+      "translate": "advancements.antcraft.void_key.title",
+      "fallback": "Key of the Void"
+    },
+    "description": {
+      "translate": "advancements.antcraft.void_key.description",
+      "fallback": "Get the Void Key from the Void Root"
+    }
+  },
+  "criteria": {
+    "has_key": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": "antcraft:void_key"
+          }
+        ]
+      }
+    }
+  },
+  "requirements": [
+    [
+      "has_key"
+    ]
+  ]
+}

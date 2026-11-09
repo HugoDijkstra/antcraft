@@ -4,6 +4,7 @@ import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.Local;
+import dev.antcraft.EndLayout;
 import dev.antcraft.EndStripChunkGenerator;
 import dev.antcraft.Strip;
 import dev.antcraft.StripBounds;
@@ -12,6 +13,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.block.entity.TheEndGatewayBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.feature.EndPlatformFeature;
@@ -28,7 +30,10 @@ import org.spongepowered.asm.mixin.injection.At;
  *   <li>the barrier walls never count as the "tallest block" (they reach the top of the world);
  *   <li>the new exit gateway stays 2 blocks off the walls;
  *   <li>a gateway whose exit lies outside the strip (the outer-island return gateways point at
- *       vanilla's spawn 100, 50, 0) sends you to the strip's arrival platform instead.
+ *       vanilla's spawn 100, 50, 0) sends you to the strip's arrival platform instead;</li>
+ *   <li>hook 13, the tall End: the tallest-block search and the exit chunk's end-stone search stay
+ *       in the vanilla band 0..255, so exits land on the outer islands (never on a tier) and the
+ *       searches take as long as in a 0..255 End.</li>
  * </ul>
  */
 @Mixin(TheEndGatewayBlockEntity.class)
@@ -56,6 +61,33 @@ public abstract class EndGatewayMixin {
 	private static boolean antcraft$ignoreWalls(BlockState state, BlockGetter level, BlockPos pos, Operation<Boolean> original) {
 		if (state.is(Blocks.BARRIER) && level instanceof Level l && Strip.bounds(l) != null) return false;
 		return original.call(state, level, pos);
+	}
+
+	@WrapOperation(
+		method = "findTallestBlock",
+		at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/BlockGetter;getMaxY()I")
+	)
+	private static int antcraft$tallestFromBandTop(BlockGetter level, Operation<Integer> original) {
+		int maxY = original.call(level);
+		return level instanceof Level l && EndStripChunkGenerator.tallEnd(l) != null ? Math.min(maxY, EndLayout.BASE_MAX_Y) : maxY;
+	}
+
+	@WrapOperation(
+		method = "findTallestBlock",
+		at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/BlockGetter;getMinY()I")
+	)
+	private static int antcraft$tallestToBandBottom(BlockGetter level, Operation<Integer> original) {
+		int minY = original.call(level);
+		return level instanceof Level l && EndStripChunkGenerator.tallEnd(l) != null ? Math.max(minY, EndLayout.BASE_MIN_Y) : minY;
+	}
+
+	@WrapOperation(
+		method = "findValidSpawnInChunk",
+		at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/chunk/LevelChunk;getHighestSectionPosition()I")
+	)
+	private static int antcraft$spawnSearchInBand(LevelChunk chunk, Operation<Integer> original) {
+		int top = original.call(chunk);
+		return EndStripChunkGenerator.tallEnd(chunk.getLevel()) != null ? Math.min(top, EndLayout.BASE_MAX_Y - 15) : top;
 	}
 
 	@WrapOperation(

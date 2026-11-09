@@ -29,6 +29,11 @@ public final class TallAdvancements {
 		"nether_depths", "guardian_hoglin_warlord", "warped_sanctuary", "guardian_molten_sovereign", "guardian_brute_warlord", "guardian_bone_colossus", "ember_forge"
 	);
 
+	/** The tall End's advancements (spec v2 5): only in a world whose End is layout 2. */
+	static final List<String> TALL_END_ONLY = List.of(
+		"end_ascent", "end_underside", "guardian_void_stalker", "guardian_phantom_matriarch", "void_key", "opened_void_seal", "crown_of_the_end"
+	);
+
 	public static void register() {
 		ServerLifecycleEvents.SERVER_STARTED.register(TallAdvancements::prune);
 		ServerLifecycleEvents.END_DATA_PACK_RELOAD.register((server, resources, success) -> {
@@ -49,11 +54,16 @@ public final class TallAdvancements {
 		return nether != null && nether.getChunkSource().getGenerator() instanceof NetherStripChunkGenerator gen && gen.netherLayout().tall();
 	}
 
+	static boolean isTallEnd(MinecraftServer server) {
+		return EndStripChunkGenerator.tallEnd(server.getLevel(net.minecraft.world.level.Level.END)) != null;
+	}
+
 	/** Removes the tall-only advancements from the tree unless the overworld (Nether) is tall; true if any was removed. */
 	private static boolean prune(MinecraftServer server) {
 		List<String> hidden = new java.util.ArrayList<>();
 		if (!isTall(server)) hidden.addAll(TALL_ONLY);
 		if (!isTallNether(server)) hidden.addAll(TALL_NETHER_ONLY);
+		if (!isTallEnd(server)) hidden.addAll(TALL_END_ONLY);
 		if (hidden.isEmpty()) return false;
 		var tree = server.getAdvancements().tree();
 		Set<Identifier> ids = new HashSet<>();
