@@ -2,6 +2,7 @@ package dev.antcraft.mixin;
 
 import dev.antcraft.AntCraft;
 import dev.antcraft.Strip;
+import dev.antcraft.StripLayout;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.DifficultyInstance;
@@ -52,10 +53,13 @@ public abstract class DeepZombieGearMixin {
 		Zombie self = (Zombie) (Object) this;
 		ServerLevel server = level.getLevel();
 		if (!AntCraft.isDeepFarm(server, self.blockPosition())) return;
-		int layer = Strip.layerAt(self.getBlockY());
-		if (layer < 1) return;
+		StripLayout layout = Strip.layout(server);
+		if (layout == null) return;
+		int deep = layout.layerAt(self.getBlockY());
+		if (deep < 1) return;
 		RandomSource random = level.getRandom();
-		int baseTier = (layer - 1) / 2; // 0..3
+		int baseTier = (deep - 1) * 4 / layout.deepLayers; // 0..3
+		int layer = layout.scaledLayer(deep); // chances as in layout 1's 8 layers
 		float pieceChance = Math.min(1.0F, 0.2F + 0.1F * layer);
 		float enchantChance = 0.1F * layer;
 		for (int i = 0; i < ARMOR.length; i++) {

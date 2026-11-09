@@ -1,10 +1,13 @@
 package dev.antcraft;
 
+import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import java.util.List;
 import java.util.stream.Stream;
 import net.minecraft.core.Holder;
+import net.minecraft.core.HolderGetter;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.core.QuartPos;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.world.level.biome.Biome;
@@ -31,12 +34,17 @@ public final class StripBiomeSource extends BiomeSource {
 				RegistryOps.retrieveElement(Biomes.DESERT),
 				RegistryOps.retrieveElement(Biomes.MANGROVE_SWAMP),
 				RegistryOps.retrieveElement(Biomes.MUSHROOM_FIELDS),
-				RegistryOps.retrieveElement(Biomes.DEEP_DARK)
+				RegistryOps.retrieveElement(Biomes.DEEP_DARK),
+				Codec.intRange(1, StripLayout.LATEST).optionalFieldOf("layout", 1).forGetter(s -> s.layout.id),
+				RegistryOps.retrieveGetter(Registries.BIOME)
 			)
 			.apply(i, StripBiomeSource::new)
 	);
 
 	private final BiomeSource base;
+	private final StripLayout layout;
+	/** For the layer biomes of later layouts (lookups only, nothing is written). */
+	private final HolderGetter<Biome> biomes;
 	private final Holder<Biome> caves;
 	private final Holder<Biome> deepDark;
 	/** forestBiomes.get(layer - 1). */
@@ -53,12 +61,25 @@ public final class StripBiomeSource extends BiomeSource {
 		Holder<Biome> desert,
 		Holder<Biome> mangrove,
 		Holder<Biome> mushroom,
-		Holder<Biome> deepDark
+		Holder<Biome> deepDark,
+		int layout,
+		HolderGetter<Biome> biomes
 	) {
 		this.base = base;
+		this.layout = StripLayout.byId(layout);
+		this.biomes = biomes;
 		this.caves = caves;
 		this.deepDark = deepDark;
 		this.forestBiomes = List.of(forest, taiga, darkForest, jungle, cherry, desert, mangrove, mushroom);
+	}
+
+	public int layout() {
+		return this.layout.id;
+	}
+
+	/** The wrapped vanilla biome source. */
+	public BiomeSource base() {
+		return this.base;
 	}
 
 	@Override
@@ -84,7 +105,7 @@ public final class StripBiomeSource extends BiomeSource {
 	public BiomeResolver createResolverForChunk(Climate.Sampler sampler, int minQuartX, int minQuartY, int minQuartZ, int sizeX, int sizeY, int sizeZ) {
 		// The vanilla source samples its climate noise eagerly for the whole requested volume. Only
 		// ask it for the vanilla height range; everything below is decided by deepBiome().
-		int lo = Math.max(minQuartY, QuartPos.fromBlock(Strip.VANILLA_MIN_Y));
+		int lo = Math.max(minQuartY, QuartPos.fromBlock(this.layout.vanillaMinY));
 		int hi = Math.max(lo + 1, minQuartY + sizeY);
 		BiomeResolver vanilla = this.base.createResolverForChunk(sampler, minQuartX, lo, minQuartZ, sizeX, hi - lo, sizeZ);
 		return (qx, qy, qz) -> {
@@ -95,14 +116,14 @@ public final class StripBiomeSource extends BiomeSource {
 
 	/** Biome for a block y below the vanilla world, or null to use vanilla. */
 	private Holder<Biome> deepBiome(int y) {
-		if (y >= Strip.VANILLA_MIN_Y) return null;
-		int layer = Strip.layerAt(y);
+		if (y >= this.layout.vanillaMinY) return null;
+		int layer = this.layout.layerAt(y);
 		if (layer >= 1) {
-			int floor = Strip.forestFloor(layer);
-			if (y >= floor - 8 && y <= floor + Strip.FOREST_HEIGHT + 4) {
+			int floor = this.layout.forestFloor(layer);
+			if (y >= floor - 8 && y <= floor + this.layout.forestHeight + 4) {
 				return this.forestBiomes.get(layer - 1);
 			}
-			if (layer == Strip.CITY_LAYER) {
+			if (layer == this.layout.cityLayer) {
 				return this.deepDark;
 			}
 		}

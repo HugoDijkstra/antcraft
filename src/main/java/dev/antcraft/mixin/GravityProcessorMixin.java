@@ -2,7 +2,7 @@ package dev.antcraft.mixin;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import dev.antcraft.Strip;
+import dev.antcraft.StripLayout;
 import dev.antcraft.StripChunkGenerator;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.LevelReader;
@@ -38,10 +38,11 @@ public abstract class GravityProcessorMixin {
 		StructurePlaceSettings settings
 	) {
 		int y = processedBlockInfo.pos().getY();
-		if (y < Strip.VANILLA_MIN_Y && level instanceof WorldGenLevel worldGen
-			&& worldGen.getLevel().getChunkSource().getGenerator() instanceof StripChunkGenerator) {
-			int layer = Strip.layerAt(y);
-			if (layer >= 1) return Strip.forestFloor(layer) + 1;
+		if (level instanceof WorldGenLevel worldGen && worldGen.getLevel().getChunkSource().getGenerator() instanceof StripChunkGenerator strip
+			&& y < strip.layout().vanillaMinY) {
+			StripLayout layout = strip.layout();
+			int layer = layout.layerAt(y);
+			if (layer >= 1) return layout.forestFloor(layer) + 1;
 		}
 		return original.call(level, type, x, z);
 	}

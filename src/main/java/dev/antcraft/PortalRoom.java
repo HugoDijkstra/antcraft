@@ -60,25 +60,25 @@ public final class PortalRoom {
 	}
 
 	/** Positions of block-entity blocks, relative to the seed. */
-	static BlockPos spawnerPos(long seed, StripBounds bounds) {
-		return new BlockPos(portalX(bounds), Strip.portalRoomFloorY() + 1, Strip.portalRoomZ(seed, bounds) + 5);
+	static BlockPos spawnerPos(long seed, StripBounds bounds, StripLayout layout) {
+		return new BlockPos(portalX(bounds), layout.portalRoomFloorY() + 1, layout.portalRoomZ(seed, bounds) + 5);
 	}
 
-	static BlockPos chestA(long seed, StripBounds bounds) {
-		return new BlockPos(minX(bounds) + 1, Strip.portalRoomFloorY() + 1, Strip.portalRoomZ(seed, bounds) - HALF_LENGTH + 1);
+	static BlockPos chestA(long seed, StripBounds bounds, StripLayout layout) {
+		return new BlockPos(minX(bounds) + 1, layout.portalRoomFloorY() + 1, layout.portalRoomZ(seed, bounds) - HALF_LENGTH + 1);
 	}
 
-	static BlockPos chestB(long seed, StripBounds bounds) {
-		return new BlockPos(maxX(bounds) - 1, Strip.portalRoomFloorY() + 1, Strip.portalRoomZ(seed, bounds) + HALF_LENGTH - 2);
+	static BlockPos chestB(long seed, StripBounds bounds, StripLayout layout) {
+		return new BlockPos(maxX(bounds) - 1, layout.portalRoomFloorY() + 1, layout.portalRoomZ(seed, bounds) + HALF_LENGTH - 2);
 	}
 
 	/** Writes the room's blocks into a chunk during terrain generation. */
-	public static void build(ChunkAccess chunk, long seed, StripBounds bounds) {
+	public static void build(ChunkAccess chunk, long seed, StripBounds bounds, StripLayout layout) {
 		ChunkPos pos = chunk.getPos();
 		int roomMinX = minX(bounds), roomMaxX = maxX(bounds), portalX = portalX(bounds);
-		int cz = Strip.portalRoomZ(seed, bounds);
+		int cz = layout.portalRoomZ(seed, bounds);
 		int minZ = cz - HALF_LENGTH, maxZ = cz + HALF_LENGTH - 1;
-		int floorY = Strip.portalRoomFloorY();
+		int floorY = layout.portalRoomFloorY();
 		int ceilY = floorY + HEIGHT;
 		if (pos.getMaxBlockZ() < minZ || pos.getMinBlockZ() > maxZ || pos.getMaxBlockX() < roomMinX || pos.getMinBlockX() > roomMaxX) return;
 
@@ -139,19 +139,19 @@ public final class PortalRoom {
 	}
 
 	/** Places the silverfish spawner and loot chests if they fall in the chunk being decorated. */
-	public static void placeBlockEntities(WorldGenLevel level, ChunkAccess chunk, long seed, StripBounds bounds) {
+	public static void placeBlockEntities(WorldGenLevel level, ChunkAccess chunk, long seed, StripBounds bounds, StripLayout layout) {
 		ChunkPos pos = chunk.getPos();
 		RandomSource random = new XoroshiroRandomSource(Strip.mix(seed, 4001), Strip.mix(pos.x(), pos.z()));
 
-		BlockPos spawner = spawnerPos(seed, bounds);
+		BlockPos spawner = spawnerPos(seed, bounds, layout);
 		if (contains(pos, spawner)) {
 			level.setBlock(spawner, Blocks.SPAWNER.defaultBlockState(), Block.UPDATE_CLIENTS);
 			if (level.getBlockEntity(spawner) instanceof SpawnerBlockEntity be) {
 				be.setEntityId(EntityTypes.SILVERFISH, random);
 			}
 		}
-		placeChest(level, pos, chestA(seed, bounds), Direction.SOUTH, random);
-		placeChest(level, pos, chestB(seed, bounds), Direction.NORTH, random);
+		placeChest(level, pos, chestA(seed, bounds, layout), Direction.SOUTH, random);
+		placeChest(level, pos, chestB(seed, bounds, layout), Direction.NORTH, random);
 	}
 
 	private static void placeChest(WorldGenLevel level, ChunkPos pos, BlockPos chest, Direction facing, RandomSource random) {

@@ -70,7 +70,9 @@ public final class AntCraft implements ModInitializer {
 
 	/** True for a position in a deep layer (below the vanilla world) of the strip overworld. */
 	public static boolean isDeepFarm(ServerLevel level, BlockPos pos) {
-		return pos.getY() < Strip.VANILLA_MIN_Y && level.dimension() == Level.OVERWORLD && isStripLevel(level);
+		if (level.dimension() != Level.OVERWORLD) return false;
+		StripLayout layout = Strip.layout(level);
+		return layout != null && pos.getY() < layout.vanillaMinY;
 	}
 
 	public static boolean isStripLevel(ServerLevel level) {
@@ -83,7 +85,10 @@ public final class AntCraft implements ModInitializer {
 		if (!isStripLevel(overworld)) return;
 		long seed = overworld.getSeed();
 		StripBounds bounds = Strip.bounds(overworld);
-		LOGGER.info("AntCraft strip world: {} x {} strip {}, holes at {}", bounds.width(), bounds.length(), bounds, describeHoles(seed, bounds));
+		StripLayout layout = Strip.layout(overworld);
+		if (layout != null) {
+			LOGGER.info("AntCraft strip world: {} x {} strip {}, layout {}, holes at {}", bounds.width(), bounds.length(), bounds, layout.id, describeHoles(layout, seed, bounds));
+		}
 
 		// Respawning picks a random spot within this radius; outside the strip there is only void (and wall tops).
 		server.getGameRules().set(GameRules.RESPAWN_RADIUS, 0, server);
@@ -164,11 +169,11 @@ public final class AntCraft implements ModInitializer {
 		return level.getBlockState(below).isSolid() && level.getFluidState(below).isEmpty() && level.getBlockState(feet).isAir();
 	}
 
-	private static String describeHoles(long seed, StripBounds bounds) {
+	private static String describeHoles(StripLayout layout, long seed, StripBounds bounds) {
 		StringBuilder sb = new StringBuilder();
-		for (int k = 0; k < Strip.FLOOR_COUNT; k++) {
+		for (int k = 0; k < layout.floorCount; k++) {
 			if (k > 0) sb.append(", ");
-			sb.append('(').append(Strip.holeX(seed, k, bounds)).append(' ').append(Strip.floorTop(k)).append(' ').append(Strip.holeZ(seed, k, bounds)).append(')');
+			sb.append('(').append(layout.holeX(seed, k, bounds)).append(' ').append(layout.floorTop(k)).append(' ').append(layout.holeZ(seed, k, bounds)).append(')');
 		}
 		return sb.toString();
 	}

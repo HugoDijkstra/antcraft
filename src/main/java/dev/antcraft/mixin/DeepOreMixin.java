@@ -1,7 +1,7 @@
 package dev.antcraft.mixin;
 
 import dev.antcraft.Strip;
-import dev.antcraft.StripChunkGenerator;
+import dev.antcraft.StripLayout;
 import net.fabricmc.fabric.api.tag.convention.v2.ConventionalBlockTags;
 import net.minecraft.core.BlockPos;
 import net.minecraft.util.RandomSource;
@@ -28,7 +28,8 @@ public abstract class DeepOreMixin {
 	private void antcraft$noVanillaOresInDeepLayers(
 		WorldGenLevel level, ChunkGenerator generator, RandomSource random, BlockPos origin, CallbackInfoReturnable<Boolean> cir
 	) {
-		if (!(generator instanceof StripChunkGenerator) || origin.getY() >= Strip.hallBottom(0) + Strip.HALL_HEIGHT) return;
+		StripLayout layout = Strip.layout(generator);
+		if (layout == null || origin.getY() >= layout.hallBottom(0) + layout.hallHeight) return;
 		for (BlockReplacement target : ((AbstractOreFeature) (Object) this).targetStates()) {
 			if (target.state().is(ConventionalBlockTags.ORES)) {
 				cir.setReturnValue(false);

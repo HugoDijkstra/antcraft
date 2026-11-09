@@ -6,6 +6,7 @@ import com.llamalad7.mixinextras.sugar.Local;
 import dev.antcraft.AntCraft;
 import dev.antcraft.AntCraftConfig;
 import dev.antcraft.Strip;
+import dev.antcraft.StripLayout;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.MobCategory;
@@ -17,7 +18,8 @@ import org.spongepowered.asm.mixin.injection.At;
 
 /**
  * Monsters spawn more often the deeper you are: in the strip overworld, a chunk near a player in
- * deep layer L gets 1 + L / 2 monster spawn passes per spawn cycle instead of 1 (layer 8: 5). The
+ * deep layer L gets 1 + L / 2 monster spawn passes per spawn cycle instead of 1 (layer 8: 5; L is
+ * the depth scaled to 8 layers, {@link StripLayout#scaledLayer}). The
  * normal mob cap still applies on every pass.
  */
 @Mixin(NaturalSpawner.class)
@@ -38,14 +40,16 @@ public abstract class DeepSpawnRateMixin {
 		original.call(category, level, chunk, predicate, callback);
 		if (category != MobCategory.MONSTER || !AntCraftConfig.get().spawnMobsNearPlayers) return;
 		if (level.dimension() != Level.OVERWORLD || !AntCraft.isStripLevel(level)) return;
-		int layer = nearestPlayerLayer(level, chunk);
-		for (int pass = 0; pass < layer / 2; pass++) {
+		StripLayout layout = Strip.layout(level);
+		if (layout == null) return;
+		int layer = nearestPlayerLayer(level, layout, chunk);
+		for (int pass = 0; pass < layout.scaledLayer(layer) / 2; pass++) {
 			if (!((SpawnStateAccessor) state).antcraft$canSpawnForCategoryLocal(category, chunk.getPos())) return;
 			original.call(category, level, chunk, predicate, callback);
 		}
 	}
 
-	private static int nearestPlayerLayer(ServerLevel level, LevelChunk chunk) {
+	private static int nearestPlayerLayer(ServerLevel level, StripLayout layout, LevelChunk chunk) {
 		double cx = chunk.getPos().getMiddleBlockX(), cz = chunk.getPos().getMiddleBlockZ();
 		ServerPlayer nearest = null;
 		double best = MAX_DISTANCE_SQR;
@@ -58,7 +62,7 @@ public abstract class DeepSpawnRateMixin {
 				nearest = player;
 			}
 		}
-		if (nearest == null || nearest.getBlockY() >= Strip.VANILLA_MIN_Y) return 0;
-		return Math.max(0, Strip.layerAt(nearest.getBlockY()));
+		if (nearest == null || nearest.getBlockY() >= layout.vanillaMinY) return 0;
+		return Math.max(0, layout.layerAt(nearest.getBlockY()));
 	}
 }

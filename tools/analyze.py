@@ -211,18 +211,30 @@ class World:
                         res.append((x, y, z, pal[pi]))
         return res
 
-# ---------------------------------------------------------------- geometry (mirrors Strip.java)
-WORLD_MIN_Y, WORLD_MAX_Y = -2032, 335
-MIN_SEC, MAX_SEC = -127, 20
-def floor_base(k): return -64 - 256 * k
+# ---------------------------------------------------------------- geometry (mirrors StripLayout.java)
+# Per overworld layout: world height, where vanilla starts (floor 0), the floor bases (k = 0..n-1),
+# the bedrock bottom. Select with --layout N (default 1). Layout 2 is the tall world of the v2 spec
+# (section 3.1); the checks below main2's geometry are still written for layout 1's numbers.
+LAYOUTS = {
+    1: dict(world=(-2032, 335), floor_bases=[-64 - 256 * k for k in range(8)], bottom_top=-2028),
+    2: dict(world=(-2032, 2031), floor_bases=[1632, 1436, 1240, 1044, 848, 652, 456, 328, 132, -64, -260, -456, -652, -848, -1044, -1240, -1436, -1632, -1828],
+            bottom_top=-2028),
+}
+LAYOUT = int(sys.argv[sys.argv.index("--layout") + 1]) if "--layout" in sys.argv else 1
+_G = LAYOUTS[LAYOUT]
+WORLD_MIN_Y, WORLD_MAX_Y = _G["world"]
+MIN_SEC, MAX_SEC = WORLD_MIN_Y >> 4, WORLD_MAX_Y >> 4  # layout 1: -127..20, layout 2: -127..126
+FLOOR_COUNT = DEEP_LAYERS = len(_G["floor_bases"])
+VANILLA_MIN_Y = _G["floor_bases"][0]
+def floor_base(k): return _G["floor_bases"][k]
 def floor_top(k): return floor_base(k) + 2
-def layer_bottom(l): return floor_top(l) + 1 if l < 8 else -2028 + 1
+def layer_bottom(l): return floor_top(l) + 1 if l < DEEP_LAYERS else _G["bottom_top"] + 1
 def layer_top(l): return floor_base(l - 1) - 1
 def forest_floor(l):
     b, t = layer_bottom(l), layer_top(l); return b + int((t - b) * 0.45)
 def layer_at(y):
     if y > floor_top(0): return 0
-    for l in range(1, 9):
+    for l in range(1, DEEP_LAYERS + 1):
         if layer_bottom(l) <= y <= layer_top(l): return l
     return -1
 
@@ -297,7 +309,7 @@ def main2():
     seed_m = None
 
     # ---- a. floors
-    for k in range(8):
+    for k in range(FLOOR_COUNT):
         fb, ft = floor_base(k), floor_top(k); hx, _, hz = holes[k]
         expected = {(hx, y, hz): "minecraft:ladder" for y in range(fb, ft + 1)}
         for dx in (-1, 1):
@@ -315,7 +327,7 @@ def main2():
 
     # ---- b. descent
     from_portal = re.search(r"portal", log)
-    for k in range(8):
+    for k in range(FLOOR_COUNT):
         fb, ft = floor_base(k), floor_top(k); hx, _, hz = holes[k]; lb = k + 1
         lowest = layer_bottom(lb)
         problems = []
@@ -389,7 +401,7 @@ def main2():
         d = s - su; diffs[d] += 1
         worst.append((d, x, z, s, su))
     worst.sort()
-    check("c.wall columns bedrock-below-split / barrier-above (all y -2032..335)", not wall_bad,
+    check(f"c.wall columns bedrock-below-split / barrier-above (all y {WORLD_MIN_Y}..{WORLD_MAX_Y})", not wall_bad,
           f"{len(splits)} wall columns; split y min {min(sv)} max {max(sv)} mean {sum(sv)/len(sv):.1f}; split-minus-adjacent-surface histogram {dict(sorted(diffs.items()))}; "
           f"lowest {worst[:3]} highest {worst[-3:]}; bad {len(wall_bad)} {wall_bad[:10]} types {dict(wall_badc)}")
     outside_bad = Counter(); outside_pos = []; cols = 0
@@ -433,7 +445,7 @@ def main2():
                     if v > 0: c["nonzero"] += 1
         per_layer[l] = dict(avg=round(s / max(tot, 1), 4), max=mx, nonzero=c["nonzero"], samples=tot, eg=nzp)
     print("skylight per layer (transparent blocks):", json.dumps(per_layer, default=str))
-    deepok = all(per_layer[l]["max"] == 0 for l in range(1, 9))
+    deepok = all(per_layer[l]["max"] == 0 for l in range(1, DEEP_LAYERS + 1))
     check("d.skylight 0 in deep layers (y<-100)", deepok,
           f"sky layers saved in {secs_with} sections below y-100; per layer max/avg/nonzero: " +
           "; ".join(f"L{l}: max {v['max']} avg {v['avg']} nz {v['nonzero']}/{v['samples']}" + (f" eg {v['eg'][:3]}" if v['nonzero'] else "") for l, v in per_layer.items()))
@@ -449,7 +461,7 @@ def main2():
         b = W.biome(8, 64, z)
         if not zb or zb[-1][1] != b: zb.append((z, b))
     deepb = {}
-    for l in range(1, 9):
+    for l in range(1, DEEP_LAYERS + 1):
         c = Counter()
         for x in range(0, 20, 4):
             for z in range(0, 300, 4):
@@ -470,7 +482,7 @@ def main2():
             it = e.get("Item", {}); items_by_layer[l][it.get("id")] += it.get("count", it.get("Count", 1))
         if not (0 <= x < 20 and 0 <= z < 300): ent_out.append((e.get("id"), round(x, 1), round(y, 1), round(z, 1)))
     layer_stats = {}
-    for l in range(1, 9):
+    for l in range(1, DEEP_LAYERS + 1):
         cnt, miss = W.box_counts(0, 19, layer_bottom(l), layer_top(l), 0, 299)
         logs = {k: v for k, v in cnt.items() if LOGS.match(k)}; leaves = {k: v for k, v in cnt.items() if LEAVES.match(k)}
         plants = {k.replace("minecraft:", ""): v for k, v in cnt.items() if PLANTS.match(k)}

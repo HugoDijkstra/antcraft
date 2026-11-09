@@ -148,11 +148,16 @@ public final class SelfCheck {
 			}
 			ChunkGeneratorKind kind = ChunkGeneratorKind.of(this.level);
 			if (kind == ChunkGeneratorKind.OVERWORLD) {
-				for (int k = 0; k < Strip.FLOOR_COUNT; k++) this.checkFloor(k);
-				for (int k = 0; k < Strip.FLOOR_COUNT; k++) this.checkSeal(k);
-				for (int k : Strip.GUARDIAN_FLOORS) this.checkBossRoom(k);
-				this.checkLeaves(strip);
-				this.checkPortalRoom();
+				StripLayout layout = Strip.layout(this.level);
+				this.report("layout", layout != null, layout == null ? "not a strip overworld generator" : "layout " + layout.id + ", " + layout.floorCount
+					+ " floors, vanilla from y " + layout.vanillaMinY + ", world y " + layout.worldMinY + ".." + layout.worldMaxY);
+				if (layout != null) {
+					for (int k = 0; k < layout.floorCount; k++) this.checkFloor(layout, k);
+					for (int k = 0; k < layout.floorCount; k++) this.checkSeal(layout, k);
+					for (int k : layout.guardianFloors()) this.checkBossRoom(layout, k);
+					this.checkLeaves(layout, strip);
+					this.checkPortalRoom(layout);
+				}
 			}
 			this.checkWallsAndOutside(kind);
 			if (kind == ChunkGeneratorKind.NETHER) this.checkShrine(((NetherStripChunkGenerator) this.level.getChunkSource().getGenerator()).layout());
@@ -160,9 +165,9 @@ public final class SelfCheck {
 
 		// ------------------------------------------------------------------ floors and seals
 
-		private void checkFloor(int k) {
-			int hx = Strip.holeX(this.seed, k, this.bounds), hz = Strip.holeZ(this.seed, k, this.bounds);
-			int base = Strip.floorBase(k), top = Strip.floorTop(k);
+		private void checkFloor(StripLayout layout, int k) {
+			int hx = layout.holeX(this.seed, k, this.bounds), hz = layout.holeZ(this.seed, k, this.bounds);
+			int base = layout.floorBase(k), top = layout.floorTop(k);
 			Problems bad = new Problems();
 			int columns = 0;
 			for (LevelChunk chunk : this.stripChunks()) {
@@ -190,28 +195,28 @@ public final class SelfCheck {
 				"y " + base + ".." + top + ", " + columns + " columns, one hole at (" + hx + " " + hz + ")" + (holeLoaded ? "" : " (not loaded)") + ", " + bad);
 		}
 
-		private void checkSeal(int k) {
+		private void checkSeal(StripLayout layout, int k) {
 			String name = "seal " + k;
-			int hx = Strip.holeX(this.seed, k, this.bounds), hz = Strip.holeZ(this.seed, k, this.bounds), top = Strip.floorTop(k);
+			int hx = layout.holeX(this.seed, k, this.bounds), hz = layout.holeZ(this.seed, k, this.bounds), top = layout.floorTop(k);
 			BlockState state = this.block(hx, top, hz);
 			if (state == null) {
 				this.skip(name, "hole chunk not loaded");
 				return;
 			}
 			AntCraftConfig config = AntCraftConfig.get();
-			Block seal = k == Strip.SEALED_FLOOR ? ModContent.NETHER_SEAL
-				: k == Strip.ANCIENT_SEALED_FLOOR ? ModContent.ANCIENT_SEAL
-				: Strip.isGuardianFloor(k) ? ModContent.GUARDIAN_SEAL : null;
-			boolean gateOn = k == Strip.SEALED_FLOOR ? config.netherKeyGate
-				: k == Strip.ANCIENT_SEALED_FLOOR ? config.ancientKeyGate
-				: Strip.isGuardianFloor(k) && config.guardians;
+			Block seal = k == layout.sealedFloor ? ModContent.NETHER_SEAL
+				: k == layout.ancientSealedFloor ? ModContent.ANCIENT_SEAL
+				: layout.isGuardianFloor(k) ? ModContent.GUARDIAN_SEAL : null;
+			boolean gateOn = k == layout.sealedFloor ? config.netherKeyGate
+				: k == layout.ancientSealedFloor ? config.ancientKeyGate
+				: layout.isGuardianFloor(k) && config.guardians;
 			String where = "(" + hx + " " + top + " " + hz + ") " + name(state);
 			if (seal == null) {
 				this.report(name, state.is(Blocks.LADDER), where + ", expected an open ladder");
 			} else if (state.is(seal)) {
 				this.report(name, true, where + (gateOn ? "" : " (gate is off in the config now; floors generated while it was on stay sealed)"));
 			} else if (state.is(Blocks.LADDER)) {
-				if (Strip.isGuardianFloor(k) && gateOn) {
+				if (layout.isGuardianFloor(k) && gateOn) {
 					boolean cleared = ArenaManager.state(this.level.getServer().overworld(), k) == ArenaManager.CLEARED;
 					this.report(name, cleared, where + (cleared ? " (guardian defeated)" : ", expected " + name(seal.defaultBlockState()) + " (guardian not defeated)"));
 				} else {
@@ -224,9 +229,9 @@ public final class SelfCheck {
 
 		// ------------------------------------------------------------------ boss rooms
 
-		private void checkBossRoom(int k) {
+		private void checkBossRoom(StripLayout layout, int k) {
 			String name = "boss room " + k;
-			int hx = Strip.holeX(this.seed, k, this.bounds), hz = Strip.holeZ(this.seed, k, this.bounds), floorTop = Strip.floorTop(k);
+			int hx = layout.holeX(this.seed, k, this.bounds), hz = layout.holeZ(this.seed, k, this.bounds), floorTop = layout.floorTop(k);
 			BlockState hole = this.block(hx, floorTop, hz);
 			boolean expected = hole != null && hole.is(ModContent.GUARDIAN_SEAL)
 				|| (hole == null || hole.is(Blocks.LADDER)) && AntCraftConfig.get().guardians;
@@ -235,18 +240,18 @@ public final class SelfCheck {
 				return;
 			}
 			boolean fighting = ArenaManager.state(this.level.getServer().overworld(), k) == ArenaManager.FIGHTING;
-			int top = floorTop + Strip.HALL_HEIGHT + ArenaManager.WALL_EXTRA_HEIGHT;
+			int top = floorTop + layout.hallHeight + ArenaManager.WALL_EXTRA_HEIGHT;
 			Problems bad = new Problems();
 			int checked = 0;
 			for (int side = -1; side <= 1; side += 2) {
-				int z = ArenaManager.wallZ(this.seed, k, this.bounds, side);
+				int z = ArenaManager.wallZ(layout, this.seed, k, this.bounds, side);
 				if (z < this.bounds.minZ() || z > this.bounds.maxZ() || this.chunk(this.bounds.minX() >> 4, z >> 4) == null) continue;
 				for (int x = this.bounds.minX(); x <= this.bounds.maxX(); x++) {
 					for (int y = floorTop + 1; y <= top; y++) {
 						BlockState state = this.block(x, y, z);
 						if (state == null) continue;
 						checked++;
-						boolean ok = ArenaManager.isDoorway(this.bounds, k, x, y)
+						boolean ok = ArenaManager.isDoorway(layout, this.bounds, k, x, y)
 							? state.isAir() || (fighting && state.is(ModContent.ARENA_GATE))
 							: state.is(Blocks.POLISHED_BLACKSTONE_BRICKS);
 						if (!ok) bad.add(x, y, z, name(state));
@@ -264,15 +269,15 @@ public final class SelfCheck {
 		// ------------------------------------------------------------------ leaves
 
 		/** No leaves that would decay by themselves right away (distance 7, not persistent). */
-		private void checkLeaves(List<LevelChunk> strip) {
+		private void checkLeaves(StripLayout layout, List<LevelChunk> strip) {
 			Problems bad = new Problems();
 			int leaves = 0;
 			BlockPos.MutableBlockPos at = new BlockPos.MutableBlockPos();
 			for (LevelChunk chunk : strip) {
 				ChunkPos pos = chunk.getPos();
-				for (int layer = 1; layer <= Strip.DEEP_LAYERS; layer++) {
-					int y0 = Math.max(Strip.forestFloor(layer) - DeepTerrain.LEAF_BAND_BELOW, Strip.layerBottom(layer));
-					int y1 = Math.min(Strip.forestFloor(layer) + DeepTerrain.LEAF_BAND_ABOVE, Strip.layerTop(layer));
+				for (int layer = 1; layer <= layout.deepLayers; layer++) {
+					int y0 = Math.max(layout.forestFloor(layer) - DeepTerrain.LEAF_BAND_BELOW, layout.layerBottom(layer));
+					int y1 = Math.min(layout.forestFloor(layer) + DeepTerrain.leafBandAbove(layout), layout.layerTop(layer));
 					for (int y = y0; y <= y1; y++) {
 						LevelChunkSection section = chunk.getSection(chunk.getSectionIndex(y));
 						if (section.hasOnlyAir()) {
@@ -360,11 +365,11 @@ public final class SelfCheck {
 
 		// ------------------------------------------------------------------ portal room
 
-		private void checkPortalRoom() {
-			int cz = Strip.portalRoomZ(this.seed, this.bounds);
+		private void checkPortalRoom(StripLayout layout) {
+			int cz = layout.portalRoomZ(this.seed, this.bounds);
 			int minX = PortalRoom.minX(this.bounds), maxX = PortalRoom.maxX(this.bounds), px = PortalRoom.portalX(this.bounds);
 			int minZ = cz - PortalRoom.HALF_LENGTH, maxZ = cz + PortalRoom.HALF_LENGTH - 1;
-			int floorY = Strip.portalRoomFloorY(), ceilY = floorY + PortalRoom.HEIGHT, fy = floorY + 2;
+			int floorY = layout.portalRoomFloorY(), ceilY = floorY + PortalRoom.HEIGHT, fy = floorY + 2;
 			for (int x : new int[] {minX, maxX}) {
 				for (int z = minZ; z < maxZ + 16; z += 16) {
 					if (this.chunk(x >> 4, Math.min(z, maxZ) >> 4) == null) {
@@ -409,9 +414,9 @@ public final class SelfCheck {
 				BlockState state = this.block(frame.getX(), frame.getY(), frame.getZ());
 				if (state.is(Blocks.END_PORTAL_FRAME) && state.getValue(EndPortalFrameBlock.HAS_EYE)) eyes++;
 			}
-			this.expect(bad, PortalRoom.spawnerPos(this.seed, this.bounds), Blocks.SPAWNER);
-			this.expect(bad, PortalRoom.chestA(this.seed, this.bounds), Blocks.CHEST);
-			this.expect(bad, PortalRoom.chestB(this.seed, this.bounds), Blocks.CHEST);
+			this.expect(bad, PortalRoom.spawnerPos(this.seed, this.bounds, layout), Blocks.SPAWNER);
+			this.expect(bad, PortalRoom.chestA(this.seed, this.bounds, layout), Blocks.CHEST);
+			this.expect(bad, PortalRoom.chestB(this.seed, this.bounds, layout), Blocks.CHEST);
 			this.report("portal room", bad.count == 0 && frames == 12,
 				"x " + minX + ".." + maxX + " z " + minZ + ".." + maxZ + " y " + floorY + ".." + ceilY + ", " + frames + "/12 frames (" + eyes + " eyes), " + bad);
 		}

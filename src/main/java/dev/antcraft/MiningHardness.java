@@ -75,10 +75,14 @@ public final class MiningHardness {
 		clientPerLayer = 0.0;
 	}
 
-	/** How many times longer pickaxe blocks take to mine in a deep layer (1 = vanilla). */
-	public static float factor(int layer, boolean clientSide) {
-		if (layer <= 0) return 1.0F;
+	/**
+	 * How many times longer pickaxe blocks take to mine at a depth (1 = vanilla). {@code depth} is
+	 * the layer scaled to layout 1's eight layers ({@link StripLayout#hardnessScale}), so the bottom
+	 * of every layout is as hard as layout 1's layer 8.
+	 */
+	public static float factor(float depth, boolean clientSide) {
+		if (depth <= 0.0F) return 1.0F;
 		double perLayer = clientSide ? clientPerLayer : AntCraftConfig.get().miningHardnessPerLayer;
-		return 1.0F + (float) perLayer * layer;
+		return 1.0F + (float) perLayer * depth;
 	}
 }

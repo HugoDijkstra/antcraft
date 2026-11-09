@@ -31,11 +31,6 @@ import org.jspecify.annotations.Nullable;
 public final class LayerTracker {
 	private LayerTracker() {}
 
-	/** English names, used when the client has no translation (index = layer). */
-	private static final String[] LAYER_NAMES = {
-		"The Surface", "Oak Hollow", "Taiga Deep", "Darkwood Caverns", "Jungle Grotto", "The Deep Dark", "Buried Desert", "Mangrove Mire", "Mushroom Abyss",
-	};
-
 	/** Last deep layer seen per player (server thread only). */
 	private static final Map<UUID, Integer> LAST_LAYER = new HashMap<>();
 
@@ -47,8 +42,10 @@ public final class LayerTracker {
 		ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> LAST_LAYER.remove(handler.player.getUUID()));
 	}
 
-	public static Component layerName(int layer) {
-		return Component.translatableWithFallback("antcraft.layer." + layer, LAYER_NAMES[layer]);
+	/** The name of a layer: its theme's, or "The Surface" for the vanilla layer. */
+	public static Component layerName(StripLayout layout, int layer) {
+		LayerTheme theme = layer >= 1 ? layout.layer(layer).theme() : null;
+		return theme != null ? theme.displayName() : Component.translatableWithFallback("antcraft.layer.0", "The Surface");
 	}
 
 	private static void tick(MinecraftServer server) {
@@ -56,6 +53,7 @@ public final class LayerTracker {
 		if (tick % 10 != 0) return;
 		ServerLevel overworld = server.overworld();
 		if (!AntCraft.isStripLevel(overworld)) return;
+		StripLayout layout = Strip.layout(overworld);
 		boolean titles = AntCraftConfig.get().layerTitles;
 		for (ServerPlayer player : server.getPlayerList().getPlayers()) {
 			ServerLevel level = player.level();
@@ -65,33 +63,34 @@ public final class LayerTracker {
 				LAST_LAYER.remove(player.getUUID());
 				continue;
 			}
-			int layer = Strip.layerAt(player.getBlockY());
+			if (layout == null) continue; // a strip Nether or End as the overworld: no layers
+			int layer = layout.layerAt(player.getBlockY());
 			if (layer < 0) continue; // inside a bedrock floor: keep the last layer
 			Integer last = LAST_LAYER.put(player.getUUID(), layer);
-			if (titles && layer >= 1 && (last == null || last != layer)) showTitle(player, layer);
+			if (titles && layer >= 1 && (last == null || last != layer)) showTitle(player, layout, layer);
 			if (titles && tick % 40 == 0) {
-				Component hint = holeHint(overworld, player);
+				Component hint = holeHint(overworld, layout, player);
 				if (hint != null) player.sendOverlayMessage(hint);
 			}
 		}
 	}
 
-	private static void showTitle(ServerPlayer player, int layer) {
+	private static void showTitle(ServerPlayer player, StripLayout layout, int layer) {
 		player.connection.send(new ClientboundSetTitlesAnimationPacket(10, 50, 20));
 		player.connection.send(new ClientboundSetSubtitleTextPacket(Component.translatableWithFallback("antcraft.layer.subtitle", "Layer %s", layer)));
-		player.connection.send(new ClientboundSetTitleTextPacket(layerName(layer)));
+		player.connection.send(new ClientboundSetTitleTextPacket(layerName(layout, layer)));
 	}
 
 	/** A hint when the player stands in the hall next to a hole that is still closed, else null. */
-	private static @Nullable Component holeHint(ServerLevel level, ServerPlayer player) {
+	private static @Nullable Component holeHint(ServerLevel level, StripLayout layout, ServerPlayer player) {
 		StripBounds bounds = Strip.bounds(level);
 		if (bounds == null) return null;
 		long seed = level.getSeed();
 		int y = player.getBlockY();
-		for (int k = 0; k < Strip.FLOOR_COUNT; k++) {
-			int floorTop = Strip.floorTop(k);
-			if (y <= floorTop || y > floorTop + Strip.HALL_HEIGHT) continue;
-			BlockPos hole = new BlockPos(Strip.holeX(seed, k, bounds), floorTop, Strip.holeZ(seed, k, bounds));
+		for (int k = 0; k < layout.floorCount; k++) {
+			int floorTop = layout.floorTop(k);
+			if (y <= floorTop || y > floorTop + layout.hallHeight) continue;
+			BlockPos hole = new BlockPos(layout.holeX(seed, k, bounds), floorTop, layout.holeZ(seed, k, bounds));
 			if (Math.abs(player.getBlockX() - hole.getX()) > HINT_RADIUS || Math.abs(player.getBlockZ() - hole.getZ()) > HINT_RADIUS) continue;
 			BlockState state = level.getBlockState(hole);
 			if (state.is(ModContent.NETHER_SEAL)) {

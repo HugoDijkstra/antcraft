@@ -1,6 +1,6 @@
 package dev.antcraft.mixin;
 
-import dev.antcraft.Strip;
+import dev.antcraft.StripLayout;
 import dev.antcraft.StripChunkGenerator;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.npc.villager.Villager;
@@ -36,13 +36,14 @@ public abstract class VillagerTradesMixin {
 
 	@Inject(method = "updateTrades", at = @At("TAIL"))
 	private void antcraft$deepVillagersTradeBetter(ServerLevel level, CallbackInfo ci) {
-		if (level != level.getServer().overworld() || !(level.getChunkSource().getGenerator() instanceof StripChunkGenerator)) return;
+		if (level != level.getServer().overworld() || !(level.getChunkSource().getGenerator() instanceof StripChunkGenerator strip)) return;
+		StripLayout layout = strip.layout();
 		Villager self = (Villager) (Object) this;
 		int y = self.getBlockY();
-		if (y >= Strip.VANILLA_MIN_Y) return;
-		int layer = Strip.layerAt(y);
+		if (y >= layout.vanillaMinY) return;
+		int layer = layout.layerAt(y);
 		if (layer < 1) return;
-		int target = Math.min(5, 1 + (layer + 1) / 2);
+		int target = Math.min(5, 1 + (layout.scaledLayer(layer) + 1) / 2);
 		VillagerData data = this.getVillagerData();
 		int current = data.level();
 		if (current >= target || data.profession().value().getTrades(current) == null) return;

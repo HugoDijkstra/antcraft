@@ -43,7 +43,7 @@ import org.jspecify.annotations.Nullable;
  * terrain inside, invisible barrier walls, void outside, a guaranteed fortress and the Nether Key
  * shrine.
  */
-public final class NetherStripChunkGenerator extends ChunkGenerator implements WrappedNoiseGenerator, StripGenerator {
+public final class NetherStripChunkGenerator extends ChunkGenerator implements WrappedNoiseGenerator, StripGenerator, FrameGenerator {
 	/**
 	 * Where the fortress, the key shrine and the bastion go. Saved with the world: worlds from
 	 * before the bastion have no {@code layout} field and keep layout 1 (fortress 2/3 along the
@@ -89,6 +89,22 @@ public final class NetherStripChunkGenerator extends ChunkGenerator implements W
 	@Override
 	public StripBounds bounds() {
 		return this.bounds;
+	}
+
+	/** The vanilla Nether / End is not moved (yet): no frame offset. */
+	@Override
+	public int frameOffset() {
+		return 0;
+	}
+
+	@Override
+	public int frameMinY() {
+		return this.base.getMinY() + this.frameOffset();
+	}
+
+	@Override
+	public int frameHeight() {
+		return this.base.getGenDepth();
 	}
 
 	/**

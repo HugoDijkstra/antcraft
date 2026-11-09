@@ -43,7 +43,7 @@ import org.jspecify.annotations.Nullable;
  * <p>The fight is fitted into the strip by mixins: the pillars ({@link #strippedSpikes}), the
  * dragon's flight path, the respawn rebuild, the gateways and the gateway exit search.
  */
-public final class EndStripChunkGenerator extends ChunkGenerator implements WrappedNoiseGenerator, StripGenerator {
+public final class EndStripChunkGenerator extends ChunkGenerator implements WrappedNoiseGenerator, StripGenerator, FrameGenerator {
 	public static final int MIN_Z = -1400, MAX_Z = 149;
 	/** Where players arrive from the overworld (vanilla: 100, 50, 0). The obsidian platform is below it. */
 	public static final int SPAWN_Y = 50, SPAWN_Z = 100;
@@ -116,6 +116,22 @@ public final class EndStripChunkGenerator extends ChunkGenerator implements Wrap
 	@Override
 	public StripBounds bounds() {
 		return this.bounds;
+	}
+
+	/** The vanilla Nether / End is not moved (yet): no frame offset. */
+	@Override
+	public int frameOffset() {
+		return 0;
+	}
+
+	@Override
+	public int frameMinY() {
+		return this.base.getMinY() + this.frameOffset();
+	}
+
+	@Override
+	public int frameHeight() {
+		return this.base.getGenDepth();
 	}
 
 	@Override

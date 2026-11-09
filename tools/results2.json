@@ -1,0 +1,463 @@
+{
+ "checks": [
+  {
+   "name": "a.floor0",
+   "passed": false,
+   "details": "y -64..-62 hole (14,81) counts {'minecraft:bedrock': 17993, 'minecraft:glowstone': 4, 'minecraft:ladder': 2, 'antcraft:guardian_seal': 1} missing 0 bad [(14, -62, 81, 'antcraft:guardian_seal')]"
+  },
+  {
+   "name": "a.floor1",
+   "passed": true,
+   "details": "y -320..-318 hole (10,23) counts {'minecraft:bedrock': 17993, 'minecraft:glowstone': 4, 'minecraft:ladder': 3} missing 0 bad []"
+  },
+  {
+   "name": "a.floor2",
+   "passed": false,
+   "details": "y -576..-574 hole (10,104) counts {'minecraft:bedrock': 17993, 'minecraft:glowstone': 4, 'minecraft:ladder': 2, 'antcraft:guardian_seal': 1} missing 0 bad [(10, -574, 104, 'antcraft:guardian_seal')]"
+  },
+  {
+   "name": "a.floor3",
+   "passed": true,
+   "details": "y -832..-830 hole (11,200) counts {'minecraft:bedrock': 17993, 'minecraft:glowstone': 4, 'minecraft:ladder': 3} missing 0 bad []"
+  },
+  {
+   "name": "a.floor4",
+   "passed": false,
+   "details": "y -1088..-1086 hole (5,236) counts {'minecraft:bedrock': 17993, 'minecraft:glowstone': 4, 'minecraft:ladder': 2, 'antcraft:nether_seal': 1} missing 0 bad [(5, -1086, 236, 'antcraft:nether_seal')]"
+  },
+  {
+   "name": "a.floor5",
+   "passed": true,
+   "details": "y -1344..-1342 hole (17,53) counts {'minecraft:bedrock': 17993, 'minecraft:glowstone': 4, 'minecraft:ladder': 3} missing 0 bad []"
+  },
+  {
+   "name": "a.floor6",
+   "passed": false,
+   "details": "y -1600..-1598 hole (11,68) counts {'minecraft:bedrock': 17993, 'minecraft:glowstone': 4, 'minecraft:ladder': 2, 'antcraft:guardian_seal': 1} missing 0 bad [(11, -1598, 68, 'antcraft:guardian_seal')]"
+  },
+  {
+   "name": "a.floor7",
+   "passed": false,
+   "details": "y -1856..-1854 hole (11,13) counts {'minecraft:bedrock': 17993, 'minecraft:glowstone': 4, 'minecraft:ladder': 2, 'antcraft:ancient_seal': 1} missing 0 bad [(11, -1854, 13, 'antcraft:ancient_seal')]"
+  },
+  {
+   "name": "b.descent floor0->layer1",
+   "passed": false,
+   "details": "hole (14,81) ladder y -73..-317 (245 blocks) + shaft -69..-62; next hall y -317..-312; column at/below bottom ['minecraft:air', 'minecraft:air', 'minecraft:air']/[(-320, 'minecraft:bedrock'), (-319, 'minecraft:bedrock'), (-318, 'minecraft:bedrock')]; PROBLEMS: upper shaft non-ladder [(-69, 'minecraft:tuff'), (-68, 'minecraft:deepslate'), (-67, 'minecraft:air'), (-66, 'minecraft:air'), (-65, 'minecraft:air'), (-62, 'antcraft:guardian_seal')] | room {'minecraft:deepslate': 21, 'minecraft:tuff': 6} | 245 non-ladder blocks in shaft: [(-73, -75, 'minecraft:deepslate'), (-76, -87, 'minecraft:tuff'), (-88, -90, 'minecraft:deepslate'), (-91, -91, 'minecraft:lava'), (-92, -100, 'minecraft:deepslate'), (-101, -102, 'minecraft:tuff'), (-103, -111, 'minecraft:deepslate'), (-112, -115, 'minecraft:tuff'), (-116, -124, 'minecraft:deepslate'), (-125, -128, 'minecraft:air'), (-129, -129, 'minecraft:lava'), (-130, -146, 'minecraft:deepslate'), (-147, -156, 'minecraft:tuff'), (-157, -164, 'minecraft:deepslate'), (-165, -203, 'minecraft:air')]"
+  },
+  {
+   "name": "b.descent floor1->layer2",
+   "passed": false,
+   "details": "hole (10,23) ladder y -329..-573 (245 blocks) + shaft -325..-318; next hall y -573..-568; column at/below bottom ['minecraft:air', 'minecraft:air', 'minecraft:air']/[(-576, 'minecraft:bedrock'), (-575, 'minecraft:bedrock'), (-574, 'minecraft:bedrock')]; PROBLEMS: upper shaft non-ladder [(-325, 'minecraft:deepslate'), (-324, 'minecraft:deepslate'), (-323, 'minecraft:air'), (-322, 'minecraft:air'), (-321, 'minecraft:air')] | room {'minecraft:deepslate': 27} | 245 non-ladder blocks in shaft: [(-329, -367, 'minecraft:deepslate'), (-368, -369, 'minecraft:tuff'), (-370, -373, 'minecraft:deepslate'), (-374, -375, 'minecraft:deepslate_iron_ore'), (-376, -380, 'minecraft:tuff'), (-381, -381, 'minecraft:air'), (-382, -382, 'minecraft:tuff'), (-383, -394, 'minecraft:deepslate'), (-395, -402, 'minecraft:tuff'), (-403, -422, 'minecraft:deepslate'), (-423, -457, 'minecraft:air'), (-458, -459, 'minecraft:water'), (-460, -460, 'minecraft:clay'), (-461, -462, 'minecraft:dirt'), (-463, -469, 'minecraft:deepslate')]"
+  },
+  {
+   "name": "b.descent floor2->layer3",
+   "passed": false,
+   "details": "hole (10,104) ladder y -585..-829 (245 blocks) + shaft -581..-574; next hall y -829..-824; column at/below bottom ['minecraft:air', 'minecraft:air', 'minecraft:air']/[(-832, 'minecraft:bedrock'), (-831, 'minecraft:bedrock'), (-830, 'minecraft:bedrock')]; PROBLEMS: upper shaft non-ladder [(-581, 'minecraft:tuff'), (-580, 'minecraft:tuff'), (-579, 'minecraft:air'), (-578, 'minecraft:air'), (-577, 'minecraft:air'), (-574, 'antcraft:guardian_seal')] | room {'minecraft:tuff': 27} | 245 non-ladder blocks in shaft: [(-585, -607, 'minecraft:tuff'), (-608, -608, 'minecraft:coal_ore'), (-609, -615, 'minecraft:tuff'), (-616, -616, 'minecraft:coal_ore'), (-617, -622, 'minecraft:tuff'), (-623, -624, 'minecraft:air'), (-625, -629, 'minecraft:calcite'), (-630, -643, 'minecraft:air'), (-644, -644, 'minecraft:tuff'), (-645, -646, 'minecraft:calcite'), (-647, -647, 'minecraft:copper_ore'), (-648, -649, 'minecraft:calcite'), (-650, -664, 'minecraft:tuff'), (-665, -665, 'minecraft:coal_ore'), (-666, -669, 'minecraft:tuff')]"
+  },
+  {
+   "name": "b.descent floor3->layer4",
+   "passed": false,
+   "details": "hole (11,200) ladder y -841..-1085 (245 blocks) + shaft -837..-830; next hall y -1085..-1080; column at/below bottom ['minecraft:air', 'minecraft:air', 'minecraft:air']/[(-1088, 'minecraft:bedrock'), (-1087, 'minecraft:bedrock'), (-1086, 'minecraft:bedrock')]; PROBLEMS: upper shaft non-ladder [(-837, 'minecraft:calcite'), (-836, 'minecraft:dripstone_block'), (-835, 'minecraft:air'), (-834, 'minecraft:air'), (-833, 'minecraft:air')] | room {'minecraft:calcite': 27} | 245 non-ladder blocks in shaft: [(-841, -849, 'minecraft:dripstone_block'), (-850, -851, 'minecraft:air'), (-852, -855, 'minecraft:dripstone_block'), (-856, -857, 'minecraft:redstone_ore'), (-858, -859, 'minecraft:calcite'), (-860, -860, 'minecraft:air'), (-861, -870, 'minecraft:calcite'), (-871, -883, 'minecraft:dripstone_block'), (-884, -886, 'minecraft:calcite'), (-887, -891, 'minecraft:dripstone_block'), (-892, -897, 'minecraft:air'), (-898, -903, 'minecraft:dripstone_block'), (-904, -910, 'minecraft:air'), (-911, -922, 'minecraft:dripstone_block'), (-923, -929, 'minecraft:air')]"
+  },
+  {
+   "name": "b.descent floor4->layer5",
+   "passed": false,
+   "details": "hole (5,236) ladder y -1097..-1341 (245 blocks) + shaft -1093..-1086; next hall y -1341..-1336; column at/below bottom ['minecraft:air', 'minecraft:air', 'minecraft:air']/[(-1344, 'minecraft:bedrock'), (-1343, 'minecraft:bedrock'), (-1342, 'minecraft:bedrock')]; PROBLEMS: upper shaft non-ladder [(-1093, 'minecraft:deepslate'), (-1092, 'minecraft:deepslate'), (-1091, 'minecraft:air'), (-1090, 'minecraft:air'), (-1089, 'minecraft:air'), (-1086, 'antcraft:nether_seal')] | room {'minecraft:deepslate': 27} | 245 non-ladder blocks in shaft: [(-1097, -1126, 'minecraft:deepslate'), (-1127, -1131, 'minecraft:sculk'), (-1132, -1152, 'minecraft:deepslate'), (-1153, -1158, 'minecraft:sculk'), (-1159, -1160, 'minecraft:deepslate'), (-1161, -1166, 'minecraft:sculk'), (-1167, -1174, 'minecraft:deepslate'), (-1175, -1178, 'minecraft:air'), (-1179, -1179, 'minecraft:sculk'), (-1180, -1186, 'minecraft:deepslate'), (-1187, -1227, 'minecraft:air'), (-1228, -1228, 'minecraft:grass_block'), (-1229, -1229, 'minecraft:dirt'), (-1230, -1230, 'minecraft:air'), (-1231, -1232, 'minecraft:water')]"
+  },
+  {
+   "name": "b.descent floor5->layer6",
+   "passed": false,
+   "details": "hole (17,53) ladder y -1353..-1597 (245 blocks) + shaft -1349..-1342; next hall y -1597..-1592; column at/below bottom ['minecraft:air', 'minecraft:air', 'minecraft:air']/[(-1600, 'minecraft:bedrock'), (-1599, 'minecraft:bedrock'), (-1598, 'minecraft:bedrock')]; PROBLEMS: upper shaft non-ladder [(-1349, 'minecraft:sandstone'), (-1348, 'minecraft:sandstone'), (-1347, 'minecraft:air'), (-1346, 'minecraft:air'), (-1345, 'minecraft:air')] | room {'minecraft:sandstone': 27} | 245 non-ladder blocks in shaft: [(-1353, -1370, 'minecraft:sandstone'), (-1371, -1371, 'minecraft:air'), (-1372, -1382, 'minecraft:sandstone'), (-1383, -1388, 'minecraft:air'), (-1389, -1395, 'minecraft:sandstone'), (-1396, -1403, 'minecraft:red_sandstone'), (-1404, -1413, 'minecraft:sandstone'), (-1414, -1417, 'minecraft:red_sandstone'), (-1418, -1423, 'minecraft:sandstone'), (-1424, -1424, 'minecraft:air'), (-1425, -1431, 'minecraft:sandstone'), (-1432, -1436, 'minecraft:red_sandstone'), (-1437, -1442, 'minecraft:sandstone'), (-1443, -1482, 'minecraft:air'), (-1483, -1483, 'minecraft:light')]"
+  },
+  {
+   "name": "b.descent floor6->layer7",
+   "passed": false,
+   "details": "hole (11,68) ladder y -1609..-1853 (245 blocks) + shaft -1605..-1598; next hall y -1853..-1848; column at/below bottom ['minecraft:air', 'minecraft:air', 'minecraft:air']/[(-1856, 'minecraft:bedrock'), (-1855, 'minecraft:bedrock'), (-1854, 'minecraft:bedrock')]; PROBLEMS: upper shaft non-ladder [(-1605, 'minecraft:blackstone'), (-1604, 'minecraft:blackstone'), (-1603, 'minecraft:air'), (-1602, 'minecraft:air'), (-1601, 'minecraft:air'), (-1598, 'antcraft:guardian_seal')] | room {'minecraft:blackstone': 27} | 245 non-ladder blocks in shaft: [(-1609, -1622, 'minecraft:blackstone'), (-1623, -1626, 'minecraft:air'), (-1627, -1633, 'minecraft:blackstone'), (-1634, -1640, 'minecraft:air'), (-1641, -1644, 'minecraft:blackstone'), (-1645, -1647, 'minecraft:air'), (-1648, -1650, 'minecraft:magma_block'), (-1651, -1700, 'minecraft:blackstone'), (-1701, -1742, 'minecraft:air'), (-1743, -1744, 'minecraft:water'), (-1745, -1745, 'minecraft:clay'), (-1746, -1747, 'minecraft:mud'), (-1748, -1754, 'minecraft:blackstone'), (-1755, -1755, 'minecraft:air'), (-1756, -1780, 'minecraft:blackstone')]"
+  },
+  {
+   "name": "b.descent floor7->layer8",
+   "passed": false,
+   "details": "hole (11,13) ladder y -1865..-2027 (163 blocks) + shaft -1861..-1854; layer8 bottom y -2027; column at/below bottom ['minecraft:deepslate', 'minecraft:deepslate', 'minecraft:deepslate']/[(-2030, 'minecraft:bedrock'), (-2029, 'minecraft:bedrock'), (-2028, 'minecraft:bedrock')]; PROBLEMS: upper shaft non-ladder [(-1861, 'minecraft:air'), (-1860, 'minecraft:deepslate'), (-1859, 'minecraft:air'), (-1858, 'minecraft:air'), (-1857, 'minecraft:air'), (-1854, 'antcraft:ancient_seal')] | room {'minecraft:blackstone': 7, 'minecraft:air': 16, 'minecraft:lava': 4} | 163 non-ladder blocks in shaft: [(-1865, -1866, 'minecraft:blackstone'), (-1867, -1890, 'minecraft:deepslate'), (-1891, -1899, 'minecraft:blackstone'), (-1900, -1903, 'minecraft:deepslate'), (-1904, -1907, 'minecraft:blackstone'), (-1908, -1909, 'minecraft:deepslate'), (-1910, -1945, 'minecraft:air'), (-1946, -1950, 'minecraft:packed_ice'), (-1951, -1951, 'minecraft:dirt'), (-1952, -1952, 'minecraft:air'), (-1953, -1954, 'minecraft:water'), (-1955, -1955, 'minecraft:clay'), (-1956, -1970, 'minecraft:deepslate'), (-1971, -1974, 'minecraft:blackstone'), (-1975, -1981, 'minecraft:deepslate')]"
+  },
+  {
+   "name": "c.wall columns bedrock-below-split / barrier-above (all y -2032..335)",
+   "passed": true,
+   "details": "644 wall columns; split y min 16 max 54 mean 47.4; split-minus-adjacent-surface histogram {-10: 5, -9: 4, -8: 5, -7: 2, -6: 3, -5: 2, -4: 3, -3: 3, -2: 19, -1: 51, 0: 520, 1: 14, 2: 1, 3: 6, 6: 1, 7: 5}; lowest [(-10, -1, 213, 46, 56), (-10, -1, 222, 45, 55), (-10, 20, 24, 49, 59)] highest [(7, -1, 242, 44, 37), (7, -1, 243, 44, 37), (7, -1, 244, 44, 37)]; bad 0 [] types {}"
+  },
+  {
+   "name": "c.outside walls all air",
+   "passed": true,
+   "details": "374284 outside columns; non-air {} e.g. []"
+  },
+  {
+   "name": "d.skylight 0 in deep layers (y<-100)",
+   "passed": true,
+   "details": "sky layers saved in 11242 sections below y-100; per layer max/avg/nonzero: L0: max 0 avg 0.0 nz 0/52366; L1: max 0 avg 0.0 nz 0/368909; L2: max 0 avg 0.0 nz 0/405739; L3: max 0 avg 0.0 nz 0/408815; L4: max 0 avg 0.0 nz 0/440363; L5: max 0 avg 0.0 nz 0/501711; L6: max 0 avg 0.0 nz 0/447101; L7: max 0 avg 0.0 nz 0/470589; L8: max 0 avg 0.0 nz 0/403935"
+  },
+  {
+   "name": "e.biome variety",
+   "passed": false,
+   "details": "surface y48..96 1 biomes {'minecraft:ocean': 4875}; along z at y64: [(0, 'minecraft:ocean')]; layer0 y-60..0 {'minecraft:lush_caves': 5566, 'minecraft:ocean': 59}; deep {1: {'minecraft:dripstone_caves': 18750, 'minecraft:forest': 5250}, 2: {'minecraft:dripstone_caves': 18750, 'minecraft:taiga': 5250}, 3: {'minecraft:dripstone_caves': 18750, 'minecraft:dark_forest': 5250}, 4: {'minecraft:dripstone_caves': 18750, 'minecraft:jungle': 5250}, 5: {'minecraft:dripstone_caves': 375, 'minecraft:deep_dark': 18375, 'minecraft:cherry_grove': 5250}, 6: {'minecraft:dripstone_caves': 18750, 'minecraft:desert': 5250}, 7: {'minecraft:dripstone_caves': 18750, 'minecraft:mangrove_swamp': 5250}, 8: {'minecraft:dripstone_caves': 11250, 'minecraft:mushroom_fields': 4875}}"
+  },
+  {
+   "name": "f.layer1 trees/lights/items",
+   "passed": true,
+   "details": "logs {'minecraft:oak_log': 584, 'minecraft:stripped_oak_wood': 1, 'minecraft:birch_log': 226} leaves {'minecraft:oak_leaves': 5301, 'minecraft:birch_leaves': 1641} light 375 plants {'sugar_cane': 124, 'poppy': 121, 'short_grass': 970, 'dandelion': 116, 'cornflower': 28} items {} mobs {'minecraft:cat': 2, 'minecraft:villager': 8, 'minecraft:iron_golem': 1, 'minecraft:sheep': 7, 'minecraft:chicken': 7, 'minecraft:cow': 4, 'minecraft:pig': 3}"
+  },
+  {
+   "name": "f.layer2 trees/lights/items",
+   "passed": true,
+   "details": "logs {'minecraft:spruce_log': 1074} leaves {'minecraft:spruce_leaves': 6347} light 375 plants {'fern': 839, 'sugar_cane': 176, 'short_grass': 336, 'sweet_berry_bush': 63} items {} mobs {'minecraft:cow': 8, 'minecraft:sheep': 13, 'minecraft:pig': 6, 'minecraft:villager': 3, 'minecraft:chicken': 12}"
+  },
+  {
+   "name": "f.layer3 trees/lights/items",
+   "passed": true,
+   "details": "logs {'minecraft:dark_oak_log': 4037, 'minecraft:oak_log': 257, 'minecraft:stripped_oak_wood': 3} leaves {'minecraft:oak_leaves': 1726, 'minecraft:dark_oak_leaves': 8437} light 375 plants {'poppy': 105, 'sugar_cane': 200, 'dandelion': 86, 'short_grass': 937, 'cornflower': 33} items {} mobs {'minecraft:cow': 7, 'minecraft:chicken': 13, 'minecraft:villager': 3, 'minecraft:iron_golem': 1, 'minecraft:cat': 2, 'minecraft:pig': 5, 'minecraft:sheep': 3}"
+  },
+  {
+   "name": "f.layer4 trees/lights/items",
+   "passed": true,
+   "details": "logs {'minecraft:jungle_log': 889, 'minecraft:acacia_log': 121, 'minecraft:acacia_wood': 12, 'minecraft:melon_stem': 12} leaves {'minecraft:oak_leaves': 540, 'minecraft:jungle_leaves': 4746, 'minecraft:acacia_leaves': 86} light 375 plants {'sugar_cane': 111, 'short_grass': 778, 'poppy': 64, 'dandelion': 59, 'cornflower': 17, 'tall_grass': 4} items {} mobs {'minecraft:chicken': 8, 'minecraft:sheep': 6, 'minecraft:villager': 6, 'minecraft:cat': 3, 'minecraft:pig': 6, 'minecraft:iron_golem': 1, 'minecraft:cow': 4}"
+  },
+  {
+   "name": "f.layer5 trees/lights/items",
+   "passed": true,
+   "details": "logs {'minecraft:cherry_log': 1261, 'minecraft:oak_log': 142, 'minecraft:stripped_oak_wood': 3} leaves {'minecraft:cherry_leaves': 12816, 'minecraft:oak_leaves': 49} light 375 plants {'sugar_cane': 150, 'pink_petals': 344, 'short_grass': 656, 'dandelion': 1} items {} mobs {'minecraft:pig': 6, 'minecraft:cow': 7, 'minecraft:chicken': 4, 'minecraft:sheep': 13, 'minecraft:iron_golem': 1, 'minecraft:villager': 3, 'minecraft:cat': 2}"
+  },
+  {
+   "name": "f.layer6 trees/lights/items",
+   "passed": false,
+   "details": "logs {} leaves {} light 375 plants {'sugar_cane': 90} items {} mobs {'minecraft:rabbit': 32, 'minecraft:camel': 3, 'minecraft:cat': 3, 'minecraft:villager': 5, 'minecraft:pig': 2, 'minecraft:iron_golem': 1}"
+  },
+  {
+   "name": "f.layer7 trees/lights/items",
+   "passed": true,
+   "details": "logs {'minecraft:muddy_mangrove_roots': 487, 'minecraft:mangrove_roots': 1260, 'minecraft:mangrove_log': 457, 'minecraft:spruce_log': 186} leaves {'minecraft:mangrove_leaves': 7183, 'minecraft:spruce_leaves': 57} light 374 plants {'short_grass': 356, 'sugar_cane': 85, 'moss_carpet': 245, 'large_fern': 12, 'fern': 5} items {} mobs {'minecraft:cow': 3, 'minecraft:sheep': 11, 'minecraft:chicken': 8, 'minecraft:pig': 8, 'minecraft:villager': 5, 'minecraft:armor_stand': 2, 'minecraft:cat': 1}"
+  },
+  {
+   "name": "f.layer8 trees/lights/items",
+   "passed": true,
+   "details": "logs {'minecraft:stripped_spruce_log': 173, 'minecraft:stripped_spruce_wood': 12, 'minecraft:spruce_log': 13, 'minecraft:mushroom_stem': 284} leaves {'minecraft:spruce_leaves': 200, 'minecraft:brown_mushroom_block': 763, 'minecraft:red_mushroom_block': 1438} light 375 plants {'red_mushroom': 119, 'brown_mushroom': 196, 'short_grass': 3} items {} mobs {'minecraft:villager': 7, 'minecraft:iron_golem': 1, 'minecraft:cat': 6, 'minecraft:mooshroom': 35}"
+  },
+  {
+   "name": "f.no entities outside strip",
+   "passed": true,
+   "details": "[]"
+  },
+  {
+   "name": "g.ancient city in layer 5",
+   "passed": true,
+   "details": "7869 city blocks y -1304..-1275 z 36..236; types {'minecraft:deepslate_bricks': 1871, 'minecraft:deepslate_tiles': 1848, 'minecraft:cracked_deepslate_tiles': 888, 'minecraft:gray_wool': 857, 'minecraft:cracked_deepslate_bricks': 766, 'minecraft:polished_deepslate': 566, 'minecraft:deepslate_tile_stairs': 526, 'minecraft:chiseled_deepslate': 184, 'minecraft:polished_basalt': 130, 'minecraft:candle': 48}; outside strip 0 []; x=20 column contents in layer5 {'minecraft:bedrock': 75900}; max vertical air run in layer5 strip (45, (0, -1230, -1186, 240)); below forest (y<-1240) (41, (16, -1303, -1263, 162))"
+  },
+  {
+   "name": "h.no vanilla structure blocks below y-55 (outside portal room)",
+   "passed": false,
+   "details": "structure-type blocks y<=-55 by (block, layer): {('minecraft:lantern', 8): (15, [(6, -1948, 2), (6, -1948, 4), (12, -1948, 9)]), ('minecraft:lantern', 7): (4, [(9, -1853, 11), (13, -1853, 11), (9, -1853, 15)]), ('minecraft:sandstone', 6): (830092, [(0, -1597, 0), (0, -1596, 0), (0, -1595, 0)]), ('minecraft:cut_sandstone', 6): (336, [(8, -1498, 12), (9, -1498, 12), (10, -1498, 12)]), ('minecraft:chest', 6): (4, [(10, -1495, 12), (8, -1495, 14), (12, -1495, 14)]), ('minecraft:chiseled_sandstone', 6): (59, [(10, -1494, 11), (8, -1494, 12), (9, -1494, 12)]), ('minecraft:suspicious_sand', 6): (22, [(14, -1486, 15), (14, -1486, 16), (14, -1486, 19)]), ('minecraft:orange_terracotta', 6): (56, [(10, -1484, 11), (10, -1484, 12), (9, -1484, 13)]), ('minecraft:blue_terracotta', 6): (2, [(10, -1484, 14), (16, -1488, 17)]), ('minecraft:stone_bricks', 8): (822, [(1, -2027, 25), (2, -2027, 25), (5, -2027, 25)]), ('minecraft:mossy_stone_bricks', 8): (222, [(3, -2027, 25), (4, -2027, 25), (6, -2027, 25)]), ('minecraft:cracked_stone_bricks', 8): (164, [(7, -2027, 25), (14, -2027, 25), (5, -2027, 26)]), ('minecraft:chest', 8): (4, [(2, -2026, 26), (7, -1949, 31), (17, -2026, 41)]), ('minecraft:stone_brick_stairs', 8): (6, [(8, -2026, 30), (9, -2026, 30), (10, -2026, 30)]), ('minecraft:spruce_planks', 8): (210, [(7, -1950, 29), (9, -1950, 29), (8, -1950, 30)]), ('minecraft:cobblestone', 8): (1, [(9, -1945, 31)]), ('minecraft:lantern', 1): (4, [(8, -317, 21), (12, -317, 21), (8, -317, 25)]), ('minecraft:spawner', 8): (1, [(9, -2026, 39)]), ('minecraft:chest', 5): (5, [(14, -1301, 40), (14, -1301, 95), (14, -1300, 124)]), ('minecraft:lantern', 5): (4, [(15, -1341, 51), (15, -1341, 55), (19, -1341, 51)]), ('minecraft:cobblestone', 1): (127, [(8, -204, 58), (10, -204, 58), (11, -204, 58)]), ('minecraft:mossy_cobblestone', 1): (25, [(9, -204, 58), (8, -204, 60), (9, -204, 60)]), ('minecraft:lantern', 6): (4, [(9, -1597, 66), (13, -1597, 66), (9, -1597, 70)]), ('minecraft:cobblestone', 2): (47, [(9, -460, 77), (10, -460, 77), (9, -460, 78)]), ('minecraft:spruce_planks', 2): (19, [(12, -460, 78), (13, -460, 78), (12, -459, 77)]), ('minecraft:mossy_cobblestone', 2): (3, [(9, -459, 76), (8, -457, 76), (11, -457, 80)]), ('minecraft:oak_planks', 1): (184, [(9, -203, 73), (10, -203, 73), (11, -203, 73)]), ('minecraft:lantern', 0): (4, [(12, -61, 79), (16, -61, 79), (12, -61, 83)]), ('minecraft:chest', 1): (1, [(9, -199, 83)]), ('minecraft:lantern', 2): (4, [(8, -573, 102), (12, -573, 102), (8, -573, 106)]), ('minecraft:cobblestone', 3): (46, [(4, -715, 113), (5, -715, 113), (6, -715, 113)]), ('minecraft:oak_planks', 3): (34, [(4, -715, 114), (5, -715, 114), (6, -715, 114)]), ('minecraft:mossy_cobblestone', 3): (22, [(7, -714, 114), (7, -713, 114), (3, -712, 115)]), ('minecraft:orange_terracotta', 4): (74, [(14, -971, 143), (15, -971, 143), (14, -970, 143)]), ('minecraft:cobblestone', 5): (112, [(10, -1228, 159), (7, -1227, 159), (8, -1227, 159)]), ('minecraft:mossy_cobblestone', 5): (32, [(13, -1227, 159), (7, -1226, 159), (6, -1227, 160)]), ('minecraft:oak_planks', 5): (184, [(7, -1223, 159), (8, -1223, 159), (9, -1223, 159)]), ('minecraft:yellow_terracotta', 4): (12, [(6, -971, 151), (14, -971, 151), (10, -971, 153)]), ('minecraft:lantern', 3): (4, [(9, -829, 198), (13, -829, 198), (9, -829, 202)]), ('minecraft:white_glazed_terracotta', 6): (8, [(8, -1483, 211), (9, -1483, 211), (8, -1483, 212)]), ('minecraft:lantern', 4): (4, [(3, -1085, 234), (7, -1085, 234), (3, -1085, 238)]), ('minecraft:spruce_planks', 7): (23, [(5, -1739, 247), (9, -1739, 259), (10, -1739, 259)]), ('minecraft:cobblestone', 7): (122, [(8, -1739, 258), (9, -1739, 258), (10, -1739, 258)]), ('minecraft:mossy_cobblestone', 7): (17, [(12, -1739, 260), (13, -1739, 270), (8, -1738, 258)]), ('minecraft:chest', 7): (2, [(9, -1738, 259), (12, -1738, 271)])}; outside portal room: [(('minecraft:lantern', 8), 13, [(6, -1948, 2), (6, -1948, 4), (12, -1948, 9)]), (('minecraft:lantern', 7), 4, [(9, -1853, 11), (13, -1853, 11), (9, -1853, 15)]), (('minecraft:sandstone', 6), 830092, [(0, -1597, 0), (0, -1596, 0), (0, -1595, 0)]), (('minecraft:cut_sandstone', 6), 336, [(8, -1498, 12), (9, -1498, 12), (10, -1498, 12)]), (('minecraft:chest', 6), 4, [(10, -1495, 12), (8, -1495, 14), (12, -1495, 14)]), (('minecraft:chiseled_sandstone', 6), 59, [(10, -1494, 11), (8, -1494, 12), (9, -1494, 12)]), (('minecraft:suspicious_sand', 6), 22, [(14, -1486, 15), (14, -1486, 16), (14, -1486, 19)]), (('minecraft:orange_terracotta', 6), 56, [(10, -1484, 11), (10, -1484, 12), (9, -1484, 13)]), (('minecraft:blue_terracotta', 6), 2, [(10, -1484, 14), (16, -1488, 17)]), (('minecraft:chest', 8), 2, [(7, -1949, 31), (9, -1949, 55)]), (('minecraft:spruce_planks', 8), 210, [(7, -1950, 29), (9, -1950, 29), (8, -1950, 30)]), (('minecraft:cobblestone', 8), 1, [(9, -1945, 31)])]; layer0 hall y-61..-55 composition {'minecraft:air': 33000, 'minecraft:deepslate': 3189, 'minecraft:cave_vines': 492, 'minecraft:cave_vines_plant': 908, 'minecraft:glow_lichen': 47, 'minecraft:spore_blossom': 8, 'minecraft:clay': 426, 'minecraft:moss_block': 3299, 'minecraft:gravel': 93, 'minecraft:vine': 29, 'minecraft:deepslate_gold_ore': 3, 'minecraft:tuff': 181, 'minecraft:polished_blackstone_bricks': 262, 'minecraft:lantern': 4, 'minecraft:glowstone': 21, 'minecraft:deepslate_redstone_ore': 33, 'minecraft:deepslate_iron_ore': 1, 'minecraft:deepslate_diamond_ore': 4}"
+  },
+  {
+   "name": "i.no fluids y-55..-53 (seal) ",
+   "passed": true,
+   "details": "fluid blocks 0 (sources 0) e.g. []; waterlogged 0; fluids in hall y-61..-56: 0 e.g. []"
+  },
+  {
+   "name": "j.spawn inside strip on solid ground",
+   "passed": true,
+   "details": "spawn (10, 63, 150) (level.dat {'pos': (10, 63, 150), 'pitch': 0.0, 'yaw': 0.0, 'dimension': 'minecraft:overworld'}); below minecraft:grass_block feet minecraft:air head minecraft:air; 5x5 below {'minecraft:grass_block': 25}; log moved ('10', '63', '150')"
+  },
+  {
+   "name": "j.starter chest",
+   "passed": true,
+   "details": "chest ((12, 63, 150), ('minecraft:chest', ()), 'minecraft:grass_block'); items [('minecraft:oak_log', 16), ('minecraft:oak_sapling', 6), ('minecraft:birch_sapling', 2), ('minecraft:bread', 8), ('minecraft:wheat_seeds', 4), ('minecraft:torch', 8)]; marker file True"
+  }
+ ],
+ "skylight": {
+  "0": {
+   "avg": 0.0,
+   "max": 0,
+   "nonzero": 0,
+   "samples": 52366,
+   "eg": []
+  },
+  "1": {
+   "avg": 0.0,
+   "max": 0,
+   "nonzero": 0,
+   "samples": 368909,
+   "eg": []
+  },
+  "2": {
+   "avg": 0.0,
+   "max": 0,
+   "nonzero": 0,
+   "samples": 405739,
+   "eg": []
+  },
+  "3": {
+   "avg": 0.0,
+   "max": 0,
+   "nonzero": 0,
+   "samples": 408815,
+   "eg": []
+  },
+  "4": {
+   "avg": 0.0,
+   "max": 0,
+   "nonzero": 0,
+   "samples": 440363,
+   "eg": []
+  },
+  "5": {
+   "avg": 0.0,
+   "max": 0,
+   "nonzero": 0,
+   "samples": 501711,
+   "eg": []
+  },
+  "6": {
+   "avg": 0.0,
+   "max": 0,
+   "nonzero": 0,
+   "samples": 447101,
+   "eg": []
+  },
+  "7": {
+   "avg": 0.0,
+   "max": 0,
+   "nonzero": 0,
+   "samples": 470589,
+   "eg": []
+  },
+  "8": {
+   "avg": 0.0,
+   "max": 0,
+   "nonzero": 0,
+   "samples": 403935,
+   "eg": []
+  }
+ },
+ "layers": {
+  "1": {
+   "logs": {
+    "minecraft:oak_log": 584,
+    "minecraft:stripped_oak_wood": 1,
+    "minecraft:birch_log": 226
+   },
+   "leaves": 6942,
+   "leaf_types": {
+    "minecraft:oak_leaves": 5301,
+    "minecraft:birch_leaves": 1641
+   },
+   "light": 375,
+   "plants": {
+    "sugar_cane": 124,
+    "poppy": 121,
+    "short_grass": 970,
+    "dandelion": 116,
+    "cornflower": 28
+   },
+   "items": {},
+   "entities": {
+    "minecraft:cat": 2,
+    "minecraft:villager": 8,
+    "minecraft:iron_golem": 1,
+    "minecraft:sheep": 7,
+    "minecraft:chicken": 7,
+    "minecraft:cow": 4,
+    "minecraft:pig": 3
+   }
+  },
+  "2": {
+   "logs": {
+    "minecraft:spruce_log": 1074
+   },
+   "leaves": 6347,
+   "leaf_types": {
+    "minecraft:spruce_leaves": 6347
+   },
+   "light": 375,
+   "plants": {
+    "fern": 839,
+    "sugar_cane": 176,
+    "short_grass": 336,
+    "sweet_berry_bush": 63
+   },
+   "items": {},
+   "entities": {
+    "minecraft:cow": 8,
+    "minecraft:sheep": 13,
+    "minecraft:pig": 6,
+    "minecraft:villager": 3,
+    "minecraft:chicken": 12
+   }
+  },
+  "3": {
+   "logs": {
+    "minecraft:dark_oak_log": 4037,
+    "minecraft:oak_log": 257,
+    "minecraft:stripped_oak_wood": 3
+   },
+   "leaves": 10163,
+   "leaf_types": {
+    "minecraft:oak_leaves": 1726,
+    "minecraft:dark_oak_leaves": 8437
+   },
+   "light": 375,
+   "plants": {
+    "poppy": 105,
+    "sugar_cane": 200,
+    "dandelion": 86,
+    "short_grass": 937,
+    "cornflower": 33
+   },
+   "items": {},
+   "entities": {
+    "minecraft:cow": 7,
+    "minecraft:chicken": 13,
+    "minecraft:villager": 3,
+    "minecraft:iron_golem": 1,
+    "minecraft:cat": 2,
+    "minecraft:pig": 5,
+    "minecraft:sheep": 3
+   }
+  },
+  "4": {
+   "logs": {
+    "minecraft:jungle_log": 889,
+    "minecraft:acacia_log": 121,
+    "minecraft:acacia_wood": 12,
+    "minecraft:melon_stem": 12
+   },
+   "leaves": 5372,
+   "leaf_types": {
+    "minecraft:oak_leaves": 540,
+    "minecraft:jungle_leaves": 4746,
+    "minecraft:acacia_leaves": 86
+   },
+   "light": 375,
+   "plants": {
+    "sugar_cane": 111,
+    "short_grass": 778,
+    "poppy": 64,
+    "dandelion": 59,
+    "cornflower": 17,
+    "tall_grass": 4
+   },
+   "items": {},
+   "entities": {
+    "minecraft:chicken": 8,
+    "minecraft:sheep": 6,
+    "minecraft:villager": 6,
+    "minecraft:cat": 3,
+    "minecraft:pig": 6,
+    "minecraft:iron_golem": 1,
+    "minecraft:cow": 4
+   }
+  },
+  "5": {
+   "logs": {
+    "minecraft:cherry_log": 1261,
+    "minecraft:oak_log": 142,
+    "minecraft:stripped_oak_wood": 3
+   },
+   "leaves": 12865,
+   "leaf_types": {
+    "minecraft:cherry_leaves": 12816,
+    "minecraft:oak_leaves": 49
+   },
+   "light": 375,
+   "plants": {
+    "sugar_cane": 150,
+    "pink_petals": 344,
+    "short_grass": 656,
+    "dandelion": 1
+   },
+   "items": {},
+   "entities": {
+    "minecraft:pig": 6,
+    "minecraft:cow": 7,
+    "minecraft:chicken": 4,
+    "minecraft:sheep": 13,
+    "minecraft:iron_golem": 1,
+    "minecraft:villager": 3,
+    "minecraft:cat": 2
+   }
+  },
+  "6": {
+   "logs": {},
+   "leaves": 0,
+   "leaf_types": {},
+   "light": 375,
+   "plants": {
+    "sugar_cane": 90
+   },
+   "items": {},
+   "entities": {
+    "minecraft:rabbit": 32,
+    "minecraft:camel": 3,
+    "minecraft:cat": 3,
+    "minecraft:villager": 5,
+    "minecraft:pig": 2,
+    "minecraft:iron_golem": 1
+   }
+  },
+  "7": {
+   "logs": {
+    "minecraft:muddy_mangrove_roots": 487,
+    "minecraft:mangrove_roots": 1260,
+    "minecraft:mangrove_log": 457,
+    "minecraft:spruce_log": 186
+   },
+   "leaves": 7240,
+   "leaf_types": {
+    "minecraft:mangrove_leaves": 7183,
+    "minecraft:spruce_leaves": 57
+   },
+   "light": 374,
+   "plants": {
+    "short_grass": 356,
+    "sugar_cane": 85,
+    "moss_carpet": 245,
+    "large_fern": 12,
+    "fern": 5
+   },
+   "items": {},
+   "entities": {
+    "minecraft:cow": 3,
+    "minecraft:sheep": 11,
+    "minecraft:chicken": 8,
+    "minecraft:pig": 8,
+    "minecraft:villager": 5,
+    "minecraft:armor_stand": 2,
+    "minecraft:cat": 1
+   }
+  },
+  "8": {
+   "logs": {
+    "minecraft:stripped_spruce_log": 173,
+    "minecraft:stripped_spruce_wood": 12,
+    "minecraft:spruce_log": 13,
+    "minecraft:mushroom_stem": 284
+   },
+   "leaves": 2401,
+   "leaf_types": {
+    "minecraft:spruce_leaves": 200,
+    "minecraft:brown_mushroom_block": 763,
+    "minecraft:red_mushroom_block": 1438
+   },
+   "light": 375,
+   "plants": {
+    "red_mushroom": 119,
+    "brown_mushroom": 196,
+    "short_grass": 3
+   },
+   "items": {},
+   "entities": {
+    "minecraft:villager": 7,
+    "minecraft:iron_golem": 1,
+    "minecraft:cat": 6,
+    "minecraft:mooshroom": 35
+   }
+  }
+ }
+}

@@ -2,9 +2,9 @@ package dev.antcraft.mixin;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import dev.antcraft.AntCraft;
 import dev.antcraft.Strip;
 import dev.antcraft.StripBounds;
+import dev.antcraft.StripLayout;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
@@ -57,7 +57,8 @@ public abstract class PortalForcerMixin {
 	private boolean antcraft$notInDeepHalls(
 		PortalForcer self, BlockPos origin, BlockPos.MutableBlockPos mutable, Direction direction, int offset, Operation<Boolean> original
 	) {
-		if (origin.getY() <= Strip.hallBottom(0) + Strip.HALL_HEIGHT + 1 && this.level.dimension() == Level.OVERWORLD && AntCraft.isStripLevel(this.level)) {
+		StripLayout layout = this.level.dimension() == Level.OVERWORLD ? Strip.layout(this.level) : null;
+		if (layout != null && origin.getY() <= layout.hallBottom(0) + layout.hallHeight + 1) {
 			return false;
 		}
 		return original.call(self, origin, mutable, direction, offset);
