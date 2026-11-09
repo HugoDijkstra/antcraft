@@ -176,8 +176,82 @@ public final class SelfCheck {
 					}
 				}
 			}
+			if (kind == ChunkGeneratorKind.NETHER) {
+				NetherLayout nether = ((NetherStripChunkGenerator) this.level.getChunkSource().getGenerator()).netherLayout();
+				this.report("layout", true, "layout " + nether.id + (nether.tall() ? " (tall)" : "") + ", " + nether.floorCount + " floors, world y "
+					+ nether.worldMinY + ".." + nether.worldMaxY);
+			}
+			if (kind == ChunkGeneratorKind.END) {
+				EndLayout end = ((EndStripChunkGenerator) this.level.getChunkSource().getGenerator()).endLayout();
+				this.report("layout", true, "layout " + end.id + (end.tall ? " (tall), " + end.tiers.size() + " tiers" : "") + ", world y " + end.worldMinY + ".." + end.worldMaxY);
+				this.checkPillars(end);
+				if (end.tall) {
+					this.checkGates(end);
+					this.checkCrown();
+				}
+			}
 			this.checkWallsAndOutside(kind);
 			if (kind == ChunkGeneratorKind.NETHER) this.checkShrine(((NetherStripChunkGenerator) this.level.getChunkSource().getGenerator()).layout());
+		}
+
+		// ------------------------------------------------------------------ End pillars
+
+		/**
+		 * The ten pillars of the dragon fight stand in the strip (obsidian right under each pillar's
+		 * top). The classic End (layout 1) keeps its original generation, which can drop pillars
+		 * (a respawn rebuilds all ten), so there it is only reported.
+		 */
+		private void checkPillars(EndLayout end) {
+			List<net.minecraft.world.level.levelgen.feature.EndSpikeFeature.EndSpike> spikes =
+				net.minecraft.world.level.levelgen.feature.EndSpikeFeature.getSpikesForLevel(this.level);
+			List<String> missing = new ArrayList<>();
+			int present = 0;
+			for (var spike : spikes) {
+				BlockState state = this.block(spike.getCenterX(), spike.getHeight() - 1, spike.getCenterZ());
+				if (state == null) {
+					this.skip("pillars", "pillar at (" + spike.getCenterX() + " " + spike.getCenterZ() + ") not loaded");
+					return;
+				}
+				if (state.is(Blocks.OBSIDIAN)) present++;
+				else missing.add("(" + spike.getCenterX() + " " + (spike.getHeight() - 1) + " " + spike.getCenterZ() + ") " + name(state));
+			}
+			String detail = present + "/" + spikes.size() + " pillars" + (missing.isEmpty() ? "" : ", missing " + missing);
+			if (end.tall) this.report("pillars", missing.isEmpty(), detail);
+			else this.lines.add(new Line(missing.isEmpty() ? Result.PASS : Result.SKIP, this.dimension, "pillars", detail + (missing.isEmpty() ? "" : " (layout 1 generation, kept as it was)")));
+		}
+
+		/** Tall End: every gateway of {@link EndLayout#gates} stands (a locked Rift Gate is an arena gate until its guardian dies). */
+		private void checkGates(EndLayout end) {
+			List<EndLayout.Gate> gates = end.gates(this.bounds);
+			List<String> bad = new ArrayList<>();
+			int gateways = 0, locked = 0;
+			for (EndLayout.Gate gate : gates) {
+				BlockState state = this.block(gate.pos().getX(), gate.pos().getY(), gate.pos().getZ());
+				if (state == null) {
+					this.skip("gates", gate.name() + " at " + gate.pos().toShortString() + " not loaded");
+					return;
+				}
+				if (state.is(Blocks.END_GATEWAY)) gateways++;
+				else if (state.is(ModContent.ARENA_GATE)) locked++;
+				else bad.add(gate.name() + " (" + gate.pos().toShortString() + ") " + name(state));
+			}
+			this.report("gates", bad.isEmpty(), gates.size() + " gates: " + gateways + " gateways, " + locked + " locked" + (bad.isEmpty() ? "" : ", bad " + bad));
+		}
+
+		/** Tall End: the Crown's Void Seal (closed, or opened into air), its hoard chest and the vault chest behind the seal. */
+		private void checkCrown() {
+			BlockPos seal = EndLayout.voidSeal(this.bounds), hoard = EndLayout.hoardChest(this.bounds), vault = EndLayout.vaultChest(this.bounds);
+			BlockState s0 = this.block(seal.getX(), seal.getY(), seal.getZ()), s1 = this.block(seal.getX(), seal.getY() + 1, seal.getZ());
+			if (s0 == null || s1 == null || this.chunk(hoard.getX() >> 4, hoard.getZ() >> 4) == null || this.chunk(vault.getX() >> 4, vault.getZ() >> 4) == null) {
+				this.skip("crown", "crown chunks not loaded");
+				return;
+			}
+			Problems bad = new Problems();
+			boolean closed = s0.is(ModContent.VOID_SEAL) && s1.is(ModContent.VOID_SEAL), open = s0.isAir() && s1.isAir();
+			if (!closed && !open) bad.add(seal.getX(), seal.getY(), seal.getZ(), name(s0) + "/" + name(s1) + " (void seal)");
+			this.expect(bad, hoard, Blocks.CHEST);
+			this.expect(bad, vault, Blocks.CHEST);
+			this.report("crown", bad.count == 0, "void seal " + (closed ? "closed" : open ? "open" : "broken") + " at " + seal.toShortString() + ", hoard and vault chests, " + bad);
 		}
 
 		// ------------------------------------------------------------------ the layer table (tall layouts)
@@ -733,19 +807,20 @@ public final class SelfCheck {
 				}
 			}
 			BlockPos chest = KeyShrine.chestPos(this.bounds, layout);
+			final int floorY = KeyShrine.floorY(layout), ceilY = floorY + (KeyShrine.CEIL_Y - KeyShrine.FLOOR_Y);
 			List<BlockPos> special = List.of(
 				chest, chest.below(),
-				new BlockPos(minX + 1, KeyShrine.FLOOR_Y + 1, minZ + 1), new BlockPos(maxX - 1, KeyShrine.FLOOR_Y + 1, maxZ - 1),
-				new BlockPos(maxX - 1, KeyShrine.FLOOR_Y + 1, minZ + 1), new BlockPos(minX + 1, KeyShrine.FLOOR_Y + 1, maxZ - 1)
+				new BlockPos(minX + 1, floorY + 1, minZ + 1), new BlockPos(maxX - 1, floorY + 1, maxZ - 1),
+				new BlockPos(maxX - 1, floorY + 1, minZ + 1), new BlockPos(minX + 1, floorY + 1, maxZ - 1)
 			);
 			Problems bad = new Problems();
 			for (int x = minX; x <= maxX; x++) {
 				for (int z = minZ; z <= maxZ; z++) {
-					for (int y = KeyShrine.FLOOR_Y; y <= KeyShrine.CEIL_Y; y++) {
+					for (int y = floorY; y <= ceilY; y++) {
 						if (special.contains(new BlockPos(x, y, z))) continue;
-						boolean shell = x == minX || x == maxX || z == minZ || z == maxZ || y == KeyShrine.FLOOR_Y || y == KeyShrine.CEIL_Y;
-						boolean doorZ = (z == minZ || z == maxZ) && (x == midX || x == midX + 1) && y > KeyShrine.FLOOR_Y && y <= KeyShrine.FLOOR_Y + 3;
-						boolean doorX = (x == minX || x == maxX) && (z == midZ || z == midZ + 1) && y > KeyShrine.FLOOR_Y && y <= KeyShrine.FLOOR_Y + 3;
+						boolean shell = x == minX || x == maxX || z == minZ || z == maxZ || y == floorY || y == ceilY;
+						boolean doorZ = (z == minZ || z == maxZ) && (x == midX || x == midX + 1) && y > floorY && y <= floorY + 3;
+						boolean doorX = (x == minX || x == maxX) && (z == midZ || z == midZ + 1) && y > floorY && y <= floorY + 3;
 						BlockState state = this.block(x, y, z);
 						boolean ok = !shell || doorZ || doorX
 							? !state.isSolid()

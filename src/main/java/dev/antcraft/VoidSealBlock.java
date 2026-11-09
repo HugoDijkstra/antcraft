@@ -19,6 +19,27 @@ public class VoidSealBlock extends SealBlock {
 		super(properties, key, advancement);
 	}
 
+	/**
+	 * Until the Void Seal is opened, players outside creative cannot break the Crown Vault's shell
+	 * (the seal wall and the walls, floor and roof behind it), so the vault is only entered through
+	 * the seal. Server side, tall End only.
+	 */
+	public static void registerVaultGuard() {
+		net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents.BEFORE.register((level, player, pos, state, blockEntity) -> {
+			if (player.isCreative() || EndStripChunkGenerator.tallEnd(level) == null) return true;
+			StripBounds bounds = EndStripChunkGenerator.endBounds(level);
+			if (bounds == null || !inVaultShell(bounds, pos)) return true;
+			return !level.getBlockState(EndLayout.voidSeal(bounds)).is(ModContent.VOID_SEAL);
+		});
+	}
+
+	/** The Crown Vault with its walls: the seal wall's z to the Crown's end, floor to roof, the strip's width. */
+	static boolean inVaultShell(StripBounds bounds, BlockPos pos) {
+		return pos.getX() >= bounds.minX() && pos.getX() <= bounds.maxX()
+			&& pos.getY() >= EndLayout.CROWN_FLOOR_Y && pos.getY() <= EndLayout.CROWN_ROOF_Y
+			&& pos.getZ() >= EndLayout.CROWN_SEAL_Z && pos.getZ() <= EndLayout.CROWN_MAX_Z;
+	}
+
 	@Override
 	protected void openWithKey(Level level, BlockPos pos) {
 		BlockPos bottom = pos;

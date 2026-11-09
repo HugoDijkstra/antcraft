@@ -48,6 +48,7 @@ public final class AntCraft implements ModInitializer {
 		LayerTracker.register();
 		ArenaManager.register();
 		EndArenas.register();
+		VoidSealBlock.registerVaultGuard();
 		SelfCheck.register();
 		TallAdvancements.register();
 

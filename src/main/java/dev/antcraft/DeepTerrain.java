@@ -74,6 +74,11 @@ public final class DeepTerrain {
 	/** Tall layouts: spires (hoodoos, pinnacles, ice spikes) and the reef's islands. */
 	private final SimplexNoise spire;
 	private final SimplexNoise island;
+	/**
+	 * Tall layouts: z of the boss room in each layer's hall (index = layer = guardian floor), or
+	 * MIN_VALUE. No cave puddles or lava falls are placed near it (see {@link #nearArena}).
+	 */
+	private final int[] arenaZ;
 
 	private DeepTerrain(long seed, StripBounds bounds, StripLayout layout) {
 		this.seed = seed;
@@ -109,6 +114,26 @@ public final class DeepTerrain {
 		// appended after the original noises: they keep their exact sequence
 		this.spire = new SimplexNoise(random);
 		this.island = new SimplexNoise(random);
+		this.arenaZ = new int[layout.deepLayers + 1];
+		java.util.Arrays.fill(this.arenaZ, Integer.MIN_VALUE);
+		if (layout.id >= 2) {
+			for (int k : layout.guardianFloors()) {
+				if (k >= 1 && k <= layout.deepLayers && !this.isVaultFloor(k)) this.arenaZ[k] = layout.holeZ(seed, k, bounds);
+			}
+		}
+	}
+
+	/** How far (z) beyond a boss room's walls its layer gets no cave puddles or lava falls. */
+	static final int ARENA_FLUID_MARGIN = 32;
+
+	/**
+	 * Tall layouts: true if column z of this layer lies within {@link #ARENA_FLUID_MARGIN} of the
+	 * boss room in the layer's hall. The caves right above the hall are open to it, so fluids there
+	 * (which flow once the chunk ticks) would pour into the hall and through the room's doorways.
+	 */
+	private boolean nearArena(int layer, int z) {
+		int hz = this.arenaZ[layer];
+		return hz != Integer.MIN_VALUE && Math.abs(z - hz) <= ArenaManager.WALL_OFFSET + ARENA_FLUID_MARGIN;
 	}
 
 	public long seed() {
@@ -414,11 +439,12 @@ public final class DeepTerrain {
 		int pondLevel = this.pondLevel(layer);
 		double fluidValue = n2(this.fluid, layer, x, z, 0.04);
 		BlockState puddle = spec.puddle() == LayerSpec.Puddle.WATER_OR_LAVA ? (fluidValue > 0.0 ? WATER : LAVA) : LAVA;
-		boolean puddleColumn = Math.abs(fluidValue) > 0.62;
+		boolean arena = this.nearArena(layer, z); // tall layouts: no fluids near a boss room
+		boolean puddleColumn = Math.abs(fluidValue) > 0.62 && !arena;
 		boolean underHole = this.nearHoleAbove(layer, x, z, 2, vault);
 		// tall layouts: hoodoos, pinnacles and ice spikes standing in the forest
 		int spireTop = village || pond || buried || this.nearHoleAbove(layer, x, z, 3, vault) ? Integer.MIN_VALUE : this.spireTop(layer, theme, x, z, surface, ceil);
-		boolean lavaFall = theme == LayerTheme.EMBER_RIFT && !village && !underHole && this.hash01(x, 0, z, 9500 + layer) < 0.0035;
+		boolean lavaFall = theme == LayerTheme.EMBER_RIFT && !village && !underHole && !arena && this.hash01(x, 0, z, 9500 + layer) < 0.0035;
 
 		// Ancient city: like vanilla's "beard_box" terrain adaptation, the city's pieces (collected
 		// above) get their space cleared plus a solid foundation; only around the pieces, so there is
@@ -931,6 +957,45 @@ public final class DeepTerrain {
 					for (int z = Math.max(pos.getMinBlockZ(), this.bounds.minZ()); z <= Math.min(pos.getMaxBlockZ(), this.bounds.maxZ()); z++) {
 						for (int y = from; y <= from + 4; y++) {
 							if (!chunk.getBlockState(at.set(x, y, z)).getFluidState().isEmpty()) chunk.setBlockState(at, DEEPSLATE);
+						}
+					}
+				}
+			}
+		}
+	}
+
+	/** Sculk catalysts this close to a boss room become plain sculk: a death in the room would spread sculk into it. */
+	static final int ARENA_CATALYST_MARGIN = 9;
+
+	/**
+	 * Tall layouts, after decoration: takes sculk veins out of every boss room (walls, doorways and
+	 * the room between them), and turns sculk catalysts near it into sculk, in the 3x3 chunk region
+	 * around {@code center}. The deep dark at the bottom of the vanilla world grows veins into the
+	 * hall of floor 0; every chunk whose region touches a room does this, so veins a later-decorated
+	 * neighbour adds are removed too.
+	 */
+	public void clearArenaSculk(WorldGenLevel level, ChunkPos center) {
+		if (this.layout.id < 2) return;
+		int regionMinX = (center.x() - 1) << 4, regionMaxX = ((center.x() + 1) << 4) + 15;
+		int regionMinZ = (center.z() - 1) << 4, regionMaxZ = ((center.z() + 1) << 4) + 15;
+		int minX = Math.max(this.bounds.minX(), regionMinX), maxX = Math.min(this.bounds.maxX(), regionMaxX);
+		BlockPos.MutableBlockPos at = new BlockPos.MutableBlockPos();
+		BlockState sculk = Blocks.SCULK.defaultBlockState();
+		for (int k : this.layout.guardianFloors()) {
+			if (this.isVaultFloor(k)) continue;
+			int hz = this.layout.holeZ(this.seed, k, this.bounds);
+			int floorTop = this.layout.floorTop(k);
+			int y0 = floorTop + 1, y1 = floorTop + this.layout.hallHeight + ArenaManager.WALL_EXTRA_HEIGHT;
+			int z0 = hz - ArenaManager.WALL_OFFSET - 1, z1 = hz + ArenaManager.WALL_OFFSET + 1, m = ARENA_CATALYST_MARGIN;
+			int minZ = Math.max(Math.max(z0 - m, this.bounds.minZ()), regionMinZ), maxZ = Math.min(Math.min(z1 + m, this.bounds.maxZ()), regionMaxZ);
+			for (int x = minX; x <= maxX; x++) {
+				for (int z = minZ; z <= maxZ; z++) {
+					for (int y = y0 - m; y <= y1 + m; y++) {
+						BlockState state = level.getBlockState(at.set(x, y, z));
+						if (state.is(Blocks.SCULK_CATALYST)) {
+							level.setBlock(at, sculk, Block.UPDATE_CLIENTS);
+						} else if (state.is(Blocks.SCULK_VEIN) && y >= y0 && y <= y1 && z >= z0 && z <= z1) {
+							level.setBlock(at, state.getFluidState().isEmpty() ? AIR : WATER, Block.UPDATE_CLIENTS);
 						}
 					}
 				}

@@ -6,6 +6,7 @@
         "type": "antcraft:strip",
         "size_from_config": true,
         "layout": 2,
+        "vault": 2,
         "base": {
           "biome_source": {
             "type": "antcraft:strip",

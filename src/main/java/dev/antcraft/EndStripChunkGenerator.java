@@ -206,8 +206,18 @@ public final class EndStripChunkGenerator extends ChunkGenerator implements Wrap
 
 	@Override
 	public CompletableFuture<ChunkAccess> createBiomes(RandomState randomState, Blender blender, StructureManager structureManager, ChunkAccess chunk) {
-		if (!this.bounds.chunkTouches(chunk.getPos())) return CompletableFuture.completedFuture(chunk);
-		if (this.endLayout.tall) return super.createBiomes(randomState, blender, structureManager, chunk); // the EndStripBiomeSource
+		ChunkPos pos = chunk.getPos();
+		if (this.endLayout.tall) {
+			// The tall End also fills the chunks next to the strip: vanilla's end_spike checks the
+			// biome at its chunk's decoration origin, and the fuzzy biome lookup there can read the
+			// neighbour chunk's biomes (plains when left empty), which silently drops that pillar.
+			if (!this.bounds.chunkTouches(pos) && !this.bounds.chunkTouches(new ChunkPos(pos.x() + 1, pos.z())) && !this.bounds.chunkTouches(new ChunkPos(pos.x() - 1, pos.z()))
+				&& !this.bounds.chunkTouches(new ChunkPos(pos.x(), pos.z() + 1)) && !this.bounds.chunkTouches(new ChunkPos(pos.x(), pos.z() - 1))) {
+				return CompletableFuture.completedFuture(chunk);
+			}
+			return super.createBiomes(randomState, blender, structureManager, chunk); // the EndStripBiomeSource
+		}
+		if (!this.bounds.chunkTouches(pos)) return CompletableFuture.completedFuture(chunk);
 		return this.base.createBiomes(randomState, blender, structureManager, chunk);
 	}
 

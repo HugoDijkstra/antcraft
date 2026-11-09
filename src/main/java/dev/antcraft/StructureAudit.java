@@ -145,10 +145,10 @@ final class StructureAudit {
 			if (plan.growsBothWays()) both++;
 			if (plan.fallback) fallback++;
 			int touchTop = plan.maxY() >= layout.layerTop(layout.vaultLayer) - 6 ? 1 : 0, touchBottom = plan.minY() <= bottom + 2 ? 1 : 0;
-			AntCraft.LOGGER.info("vaultaudit {}x{} M={} try {}: pieces {} rooms {} above {} below {} touchTop {} touchBottom {} grade {} entrance {} exitWell {} fallback {} entranceWell {}",
+			AntCraft.LOGGER.info("vaultaudit {}x{} M={} try {}: pieces {} rooms {} above {} below {} touchTop {} touchBottom {} grade {} entrance {} exitWell {} fallback {} entranceWell {} spawners {}",
 				bounds.width(), bounds.length(), margin, i, plan.pieces.size(), plan.chamberRooms, plan.maxY() - plan.startBox.maxY(), plan.startBox.minY() - plan.minY(),
 				touchTop, touchBottom, VaultPlan.grade(plan), plan.entranceValid, plan.exitRoom.minY() - bottom, plan.fallback,
-				plan.entranceValid ? layout.floorBase(layout.vaultLayer - 1) - 4 - plan.entranceFloorY : -1);
+				plan.entranceValid ? layout.floorBase(layout.vaultLayer - 1) - 4 - plan.entranceFloorY : -1, VaultPlan.spawnersInside(start.getPieces(), bounds));
 		}
 		java.util.Collections.sort(roomCounts);
 		String summary = "vaultaudit summary " + bounds.width() + "x" + bounds.length() + " M=" + margin + ": " + valid + "/" + count + " valid, >=4 rooms " + rooms4

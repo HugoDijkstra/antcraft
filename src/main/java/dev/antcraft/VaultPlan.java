@@ -162,6 +162,18 @@ public final class VaultPlan {
 		return CHAMBER_ROOM.matcher(location(piece)).find();
 	}
 
+	private static final Pattern SPAWNER = Pattern.compile("trial_chambers/spawner/(?!connectors/)");
+
+	/** Trial spawner pieces (one spawner each) that lie inside the strip: the ones the clip keeps. */
+	static int spawnersInside(List<StructurePiece> pieces, StripBounds bounds) {
+		int n = 0;
+		for (StructurePiece piece : pieces) {
+			BoundingBox b = piece.getBoundingBox();
+			if (b.minX() >= bounds.minX() && b.maxX() <= bounds.maxX() && b.minZ() >= bounds.minZ() && b.maxZ() <= bounds.maxZ() && SPAWNER.matcher(location(piece)).find()) n++;
+		}
+		return n;
+	}
+
 	/** The plan of a (shifted) vault start, or null if it is not a valid vault start. */
 	public static @Nullable VaultPlan of(StructureStart start, StripBounds bounds) {
 		if (!start.isValid() || start.getPieces().isEmpty() || !(start.getPieces().getFirst() instanceof PoolElementStructurePiece first)) return null;
@@ -296,6 +308,32 @@ public final class VaultPlan {
 	static long score(VaultPlan plan) {
 		return (long) grade(plan) << 40 | (long) Math.min(plan.chamberRooms, 255) << 24 | (plan.growsBothWays() ? 1L : 0L) << 23 | (plan.deepRoom() ? 1L : 0L) << 22
 			| Math.min(plan.pieces.size(), (1 << 22) - 1);
+	}
+
+	// ------------------------------------------------------------------ selection 2 (best of 32)
+
+	/** Targets of spec 3.5.6: chamber rooms, trial spawners kept by the clip, exit well length (room floor above the vault bottom). */
+	static final int TARGET_ROOMS = 4, TARGET_SPAWNERS = 6, TARGET_EXIT_WELL = 40;
+
+	/** How far the exit room's bottom lies above the vault's bottom row: about the exit well's length. */
+	static int exitDepth(VaultPlan plan, StripLayout layout) {
+		return plan.exitRoom.minY() - layout.layerBottom(layout.vaultLayer);
+	}
+
+	static boolean meetsTargets(VaultPlan plan, int spawners, StripLayout layout) {
+		return plan.entranceValid && !plan.fallback && plan.chamberRooms >= TARGET_ROOMS && spawners >= TARGET_SPAWNERS && exitDepth(plan, layout) <= TARGET_EXIT_WELL;
+	}
+
+	/**
+	 * Selection-2 ranking: an entrance, a chamber room for the exit, the most chamber rooms, enough
+	 * trial spawners, a short enough exit well, growth both ways, then the shorter exit well, more
+	 * spawners and the most pieces.
+	 */
+	static long score2(VaultPlan plan, int spawners, StripLayout layout) {
+		int depth = Math.clamp(exitDepth(plan, layout), 0, 255);
+		return (plan.entranceValid ? 1L : 0L) << 60 | (plan.fallback ? 0L : 1L) << 59 | (long) Math.min(plan.chamberRooms, 255) << 51
+			| (spawners >= TARGET_SPAWNERS ? 1L : 0L) << 50 | (depth <= TARGET_EXIT_WELL ? 1L : 0L) << 49 | (plan.growsBothWays() ? 1L : 0L) << 48
+			| (long) (255 - depth) << 40 | (long) Math.min(spawners, 255) << 32 | Math.min(plan.pieces.size(), 0xFFFF_FFFFL);
 	}
 
 	// ------------------------------------------------------------------ lookups

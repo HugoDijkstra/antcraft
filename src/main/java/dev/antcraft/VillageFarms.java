@@ -31,7 +31,8 @@ import org.jspecify.annotations.Nullable;
 /**
  * Every village of a tall strip world has at least one farm (spec v2 3.7). A village without a
  * farm piece gets one added to its start: a vanilla farm template on free, flat, dry ground inside
- * the village or just beyond its north or south end, within the village's reference radius.
+ * the village, beyond its north or south end, or further along the strip, within the village's
+ * reference radius.
  */
 public final class VillageFarms {
 	private VillageFarms() {}
@@ -48,12 +49,14 @@ public final class VillageFarms {
 	/** Surface ground through the generator's heights (water and ground below sea level rejected). */
 	public static Ground surface(StripChunkGenerator generator, LevelHeightAccessor heights, RandomState randomState) {
 		int sea = generator.getSeaLevel();
-		return (x, z) -> {
+		// one instance per structure-start step of a chunk (single thread): memoize the noise columns
+		java.util.Map<Long, Integer> cache = new java.util.HashMap<>();
+		return (x, z) -> cache.computeIfAbsent(ChunkPos.pack(x, z), key -> {
 			int world = generator.getBaseHeight(x, z, Heightmap.Types.WORLD_SURFACE_WG, heights, randomState);
 			int floor = generator.getBaseHeight(x, z, Heightmap.Types.OCEAN_FLOOR_WG, heights, randomState);
 			if (world != floor || world - 1 < sea) return Integer.MIN_VALUE;
 			return world - 1;
-		};
+		});
 	}
 
 	public static Ground deep(int forestFloor) {
@@ -112,14 +115,17 @@ public final class VillageFarms {
 		BoundingBox village = start.getBoundingBox();
 		BoundingBox centre = start.getPieces().getFirst().getBoundingBox();
 		int cz = (centre.minZ() + centre.maxZ()) / 2;
-		for (String location : farmTemplates(type)) {
-			SinglePoolElement element = StructurePoolElement.single("minecraft:" + location, list).apply(StructureTemplatePool.Projection.RIGID);
-			PoolElementStructurePiece farm = place(start, element, templates, bounds, village, cz, ground, random);
-			if (farm != null) {
-				List<StructurePiece> pieces = new ArrayList<>(start.getPieces());
-				pieces.add(farm);
-				if (log) AntCraft.LOGGER.info("AntCraft: village at {} got a farm ({}) at {}", chunkPos, location, farm.getBoundingBox());
-				return new StructureStart(start.getStructure(), chunkPos, start.getReferences(), new PiecesContainer(pieces));
+		// both farm sizes in and next to the village first, then both further along the strip
+		for (boolean far : new boolean[] {false, true}) {
+			for (String location : farmTemplates(type)) {
+				SinglePoolElement element = StructurePoolElement.single("minecraft:" + location, list).apply(StructureTemplatePool.Projection.RIGID);
+				PoolElementStructurePiece farm = place(start, element, templates, bounds, village, cz, ground, random, far);
+				if (farm != null) {
+					List<StructurePiece> pieces = new ArrayList<>(start.getPieces());
+					pieces.add(farm);
+					if (log) AntCraft.LOGGER.info("AntCraft: village at {} got a farm ({}) at {}", chunkPos, location, farm.getBoundingBox());
+					return new StructureStart(start.getStructure(), chunkPos, start.getReferences(), new PiecesContainer(pieces));
+				}
 			}
 		}
 		if (log) AntCraft.LOGGER.warn("AntCraft: no spot for a farm in the village at {} ({})", chunkPos, village);
@@ -127,7 +133,8 @@ public final class VillageFarms {
 	}
 
 	private static @Nullable PoolElementStructurePiece place(
-		StructureStart start, SinglePoolElement element, StructureTemplateManager templates, StripBounds bounds, BoundingBox village, int cz, Ground ground, RandomSource random
+		StructureStart start, SinglePoolElement element, StructureTemplateManager templates, StripBounds bounds, BoundingBox village, int cz, Ground ground, RandomSource random,
+		boolean far
 	) {
 		var size = element.getSize(templates, Rotation.NONE);
 		int longSide = Math.max(size.getX(), size.getZ());
@@ -149,6 +156,17 @@ public final class VillageFarms {
 			int north = village.minZ() - d - (sz - 1), south = village.maxZ() + d;
 			candidates.add(new int[] {southFirst ? south : north, 1});
 			candidates.add(new int[] {southFirst ? north : south, 1});
+		}
+		if (far) {
+			// (c) only (after both farm sizes found no spot above): further along the strip, still
+			// within the radius. A village whose centre stands mostly outside a narrow strip can have
+			// water, a ravine or slopes right next to it.
+			candidates.clear();
+			for (int d = 14; d <= 2 * RADIUS; d += 2) {
+				int north = village.minZ() - d - (sz - 1), south = village.maxZ() + d;
+				candidates.add(new int[] {southFirst ? south : north, 1});
+				candidates.add(new int[] {southFirst ? north : south, 1});
+			}
 		}
 		for (int[] c : candidates) {
 			int z = c[0];

@@ -1,6 +1,5 @@
 package dev.antcraft;
 
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
@@ -66,15 +65,18 @@ public final class TallAdvancements {
 		if (!isTallEnd(server)) hidden.addAll(TALL_END_ONLY);
 		if (hidden.isEmpty()) return false;
 		var tree = server.getAdvancements().tree();
-		Set<Identifier> ids = new HashSet<>();
+		// one at a time, each only if still there: removing a parent takes its children with it, and
+		// the tree warns about every id of a set that it no longer knows
+		int removed = 0;
 		for (String path : hidden) {
 			Identifier id = Identifier.fromNamespaceAndPath(AntCraft.MOD_ID, path);
-			if (tree.get(id) != null) ids.add(id);
+			if (tree.get(id) == null) continue;
+			tree.remove(Set.of(id));
+			removed++;
 		}
-		if (ids.isEmpty()) return false;
-		tree.remove(ids);
+		if (removed == 0) return false;
 		tree.repositionNodes(); // the old tree's layout
-		AntCraft.LOGGER.info("AntCraft: {} tall-layout advancements hidden (not a tall overworld)", ids.size());
+		AntCraft.LOGGER.info("AntCraft: {} tall-layout advancements hidden (not a tall overworld)", removed);
 		return true;
 	}
 }

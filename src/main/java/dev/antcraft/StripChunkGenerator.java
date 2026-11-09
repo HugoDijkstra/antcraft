@@ -67,7 +67,8 @@ public final class StripChunkGenerator extends ChunkGenerator implements Wrapped
 		i -> i.group(
 				NoiseBasedChunkGenerator.CODEC.codec().fieldOf("base").forGetter(g -> g.serializedBase),
 				StripBounds.SIZE_CODEC.forGetter(g -> g.bounds),
-				Codec.intRange(1, StripLayout.LATEST).optionalFieldOf("layout", 1).forGetter(g -> g.layout.id)
+				Codec.intRange(1, StripLayout.LATEST).optionalFieldOf("layout", 1).forGetter(g -> g.layout.id),
+				Codec.intRange(1, StripChunkGenerator.LATEST_VAULT_SELECTION).optionalFieldOf("vault", 1).forGetter(g -> g.vaultSelection)
 			)
 			.apply(i, StripChunkGenerator::new)
 	).validate(StripChunkGenerator::checkLayout);
@@ -114,16 +115,24 @@ public final class StripChunkGenerator extends ChunkGenerator implements Wrapped
 	private final NoiseBasedChunkGenerator base;
 	private final StripBounds bounds;
 	private final StripLayout layout;
+	/**
+	 * How the Trial Vault is chosen among its tries (saved with the world, so a world keeps its
+	 * vault and the starts planned around its exit): 1 = 1.0.20's best-of-16, 2 = best of 32 for
+	 * in-strip trial spawners and a short exit well (new tall worlds, through the preset).
+	 */
+	private final int vaultSelection;
+	static final int LATEST_VAULT_SELECTION = 2;
 	/** y ranges where decoration can place blocks: the vanilla world, each forest band, the deep city. */
 	private final int[][] spillRanges;
 	/** Per wall column: lowest y that is barrier (everything below is bedrock). */
 	private final Map<Long, Integer> wallSplit = new ConcurrentHashMap<>();
 
-	public StripChunkGenerator(NoiseBasedChunkGenerator base, StripBounds bounds, int layout) {
+	public StripChunkGenerator(NoiseBasedChunkGenerator base, StripBounds bounds, int layout, int vaultSelection) {
 		super(base.getBiomeSource());
 		this.serializedBase = base;
 		this.bounds = bounds;
 		this.layout = StripLayout.byId(layout);
+		this.vaultSelection = vaultSelection;
 		if (this.layout.frameOffset != 0) {
 			if (!(base.getBiomeSource() instanceof StripBiomeSource source)) {
 				throw new IllegalArgumentException("AntCraft layout " + layout + " needs the antcraft:strip biome source");
@@ -503,6 +512,7 @@ public final class StripChunkGenerator extends ChunkGenerator implements Wrapped
 			ThemeDecor.decorate(level, this, chunk, terrain, deepPieces, vault);
 			ThemeDecor.dungeons(level, this, chunk, terrain, this.findDeepPiecesAround(level, structureManager, pos, 16), vault);
 			ThemeDecor.cleanShriekers(level, terrain, pos, this.findDeepPiecesAround(level, structureManager, pos, 32), vault);
+			terrain.clearArenaSculk(level, pos);
 			if (vault != null) vault.cutWells(level, pos, this.layout, this.bounds);
 		}
 		terrain.decorateForests(level, chunk, deepPieces); // plants and lights after trees, so they don't block them
@@ -723,6 +733,7 @@ public final class StripChunkGenerator extends ChunkGenerator implements Wrapped
 			AntCraft.LOGGER.error("AntCraft: structure {} is missing", VaultPlan.KEY.identifier());
 			return null;
 		}
+		if (this.vaultSelection >= 2) return this.chooseVault2(holder, registryAccess, state, templates, level);
 		long t0 = System.nanoTime();
 		long seed = state.getLevelSeed();
 		int margin = vaultMargin(this.bounds);
@@ -754,6 +765,51 @@ public final class StripChunkGenerator extends ChunkGenerator implements Wrapped
 			AntCraft.LOGGER.error("AntCraft: the trial vault failed to generate");
 			return null;
 		}
+		if (!bestPlan.entranceValid) AntCraft.LOGGER.warn("AntCraft: no trial vault try has an entrance column; using the start piece centre {}", bestPlan);
+		return new VaultChoice(List.copyOf(best.getPieces()), bestPlan, chosen, VaultPlan.grade(bestPlan), millis);
+	}
+
+	/** Vault tries of selection 2 (spec 3.5.6 tuning, phase 6 follow-up). */
+	static final int VAULT_TRIES_2 = 32;
+
+	/**
+	 * Vault selection 2: the best of {@link #VAULT_TRIES_2} tries by {@link VaultPlan#score2}. In
+	 * strips up to 30 wide the jigsaw grows only the corridor spine (the side hallways leave the
+	 * strip), so every try has the two end rooms; the tries differ in how many trial spawners stay
+	 * inside the strip and how deep the exit room lies, which this picks for. Stops early at a try
+	 * that meets every target.
+	 */
+	private @Nullable VaultChoice chooseVault2(Holder<Structure> holder, RegistryAccess registryAccess, ChunkGeneratorStructureState state, StructureTemplateManager templates,
+		ResourceKey<Level> level) {
+		long t0 = System.nanoTime();
+		long seed = state.getLevelSeed();
+		int margin = vaultMargin(this.bounds);
+		StructureStart best = null;
+		VaultPlan bestPlan = null;
+		long bestScore = Long.MIN_VALUE;
+		int chosen = -1;
+		for (int i = 0; i < VAULT_TRIES_2; i++) {
+			StructureStart start = this.vaultTry(holder, registryAccess, state, templates, level, Strip.mix(seed, 9500 + i), this.bounds, margin, vaultRotation(i));
+			if (start == null) continue;
+			VaultPlan plan = VaultPlan.of(start, this.bounds);
+			if (plan == null) continue;
+			int spawners = VaultPlan.spawnersInside(start.getPieces(), this.bounds);
+			long score = VaultPlan.score2(plan, spawners, this.layout);
+			if (score > bestScore) {
+				best = start;
+				bestPlan = plan;
+				bestScore = score;
+				chosen = i;
+			}
+			if (VaultPlan.meetsTargets(plan, spawners, this.layout)) break;
+		}
+		long millis = (System.nanoTime() - t0) / 1_000_000;
+		if (best == null) {
+			AntCraft.LOGGER.error("AntCraft: the trial vault failed to generate");
+			return null;
+		}
+		AntCraft.LOGGER.info("AntCraft: trial vault: try {} of {} chosen: {} chamber rooms, {} trial spawners in the strip, exit room {} above the vault floor", chosen,
+			VAULT_TRIES_2, bestPlan.chamberRooms, VaultPlan.spawnersInside(best.getPieces(), this.bounds), VaultPlan.exitDepth(bestPlan, this.layout));
 		if (!bestPlan.entranceValid) AntCraft.LOGGER.warn("AntCraft: no trial vault try has an entrance column; using the start piece centre {}", bestPlan);
 		return new VaultChoice(List.copyOf(best.getPieces()), bestPlan, chosen, VaultPlan.grade(bestPlan), millis);
 	}
