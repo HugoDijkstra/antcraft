@@ -1,0 +1,26 @@
+{
+  "parent": "antcraft:layer_2",
+  "display": {
+    "icon": {
+      "id": "minecraft:leaf_litter"
+    },
+    "title": {
+      "translate": "advancements.antcraft.layer_autumn_hollow.title",
+      "fallback": "Autumn Hollow"
+    },
+    "description": {
+      "translate": "advancements.antcraft.layer_autumn_hollow.description",
+      "fallback": "Reach the red-gold forest of the Autumn Hollow"
+    }
+  },
+  "criteria": {
+    "reached": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "reached"
+    ]
+  ]
+}

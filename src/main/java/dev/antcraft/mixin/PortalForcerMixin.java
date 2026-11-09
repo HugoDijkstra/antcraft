@@ -15,6 +15,8 @@ import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Constant;
+import org.spongepowered.asm.mixin.injection.ModifyConstant;
 
 /**
  * When the game builds a new exit portal in the strip overworld, it may only use spots well inside
@@ -62,5 +64,35 @@ public abstract class PortalForcerMixin {
 			return false;
 		}
 		return original.call(self, origin, mutable, direction, offset);
+	}
+
+	/** The tall strip overworld's layout, or null (layout 1 keeps vanilla's numbers). */
+	private StripLayout antcraft$tall() {
+		StripLayout layout = this.level.dimension() == Level.OVERWORLD ? Strip.layout(this.level) : null;
+		return layout != null && layout.frameOffset != 0 ? layout : null;
+	}
+
+	/**
+	 * Hook 14 (rule 1, banded creation): in a tall overworld new portals are built in the moved
+	 * vanilla band only, 1643..2015; the fallback platform goes to 70 + 1696 (at most 2006).
+	 */
+	@WrapOperation(method = "createPortal", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerLevel;getMinY()I"))
+	private int antcraft$bandBottom(ServerLevel level, Operation<Integer> original) {
+		int y = original.call(level);
+		StripLayout layout = this.antcraft$tall();
+		return layout == null ? y : Math.max(y, layout.hallBottom(0) + layout.hallHeight + 1);
+	}
+
+	@WrapOperation(method = "createPortal", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerLevel;getMaxY()I"))
+	private int antcraft$bandTop(ServerLevel level, Operation<Integer> original) {
+		int y = original.call(level);
+		StripLayout layout = this.antcraft$tall();
+		return layout == null ? y : Math.min(y, layout.vanillaMinY + 384 - 1);
+	}
+
+	@ModifyConstant(method = "createPortal", constant = @Constant(intValue = 70))
+	private int antcraft$platformHeight(int value) {
+		StripLayout layout = this.antcraft$tall();
+		return layout == null ? value : value + layout.frameOffset;
 	}
 }

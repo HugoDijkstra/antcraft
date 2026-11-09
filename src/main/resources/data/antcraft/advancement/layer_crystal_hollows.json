@@ -1,0 +1,26 @@
+{
+  "parent": "antcraft:layer_5",
+  "display": {
+    "icon": {
+      "id": "minecraft:amethyst_shard"
+    },
+    "title": {
+      "translate": "advancements.antcraft.layer_crystal_hollows.title",
+      "fallback": "Crystal Hollows"
+    },
+    "description": {
+      "translate": "advancements.antcraft.layer_crystal_hollows.description",
+      "fallback": "Reach the Crystal Hollows"
+    }
+  },
+  "criteria": {
+    "reached": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "reached"
+    ]
+  ]
+}

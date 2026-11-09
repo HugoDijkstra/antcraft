@@ -1,0 +1,26 @@
+{
+  "parent": "antcraft:layer_3",
+  "display": {
+    "icon": {
+      "id": "minecraft:trial_key"
+    },
+    "title": {
+      "translate": "advancements.antcraft.layer_trial_vault.title",
+      "fallback": "Trial Vault"
+    },
+    "description": {
+      "translate": "advancements.antcraft.layer_trial_vault.description",
+      "fallback": "Climb down into the Trial Vault"
+    }
+  },
+  "criteria": {
+    "reached": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "reached"
+    ]
+  ]
+}

@@ -67,7 +67,13 @@ public final class LayerTracker {
 			int layer = layout.layerAt(player.getBlockY());
 			if (layer < 0) continue; // inside a bedrock floor: keep the last layer
 			Integer last = LAST_LAYER.put(player.getUUID(), layer);
-			if (titles && layer >= 1 && (last == null || last != layer)) showTitle(player, layout, layer);
+			if (layer >= 1 && (last == null || last != layer)) {
+				// layer advancements are awarded by theme, so every layout uses the same ids
+				LayerTheme theme = layout.layer(layer).theme();
+				if (theme != null) award(player, theme.advancementId, "reached");
+				if (last != null && layout.isVault(last) && layer == last + 1) award(player, "trial_vault_escaped", "escaped");
+				if (titles) showTitle(player, layout, layer);
+			}
 			if (titles && tick % 40 == 0) {
 				Component hint = holeHint(overworld, layout, player);
 				if (hint != null) player.sendOverlayMessage(hint);
@@ -77,7 +83,10 @@ public final class LayerTracker {
 
 	private static void showTitle(ServerPlayer player, StripLayout layout, int layer) {
 		player.connection.send(new ClientboundSetTitlesAnimationPacket(10, 50, 20));
-		player.connection.send(new ClientboundSetSubtitleTextPacket(Component.translatableWithFallback("antcraft.layer.subtitle", "Layer %s", layer)));
+		Component subtitle = layout.isVault(layer)
+			? Component.translatableWithFallback("antcraft.layer.vault_subtitle", "Layer %s — find the deepest chamber", layer)
+			: Component.translatableWithFallback("antcraft.layer.subtitle", "Layer %s", layer);
+		player.connection.send(new ClientboundSetSubtitleTextPacket(subtitle));
 		player.connection.send(new ClientboundSetTitleTextPacket(layerName(layout, layer)));
 	}
 
@@ -90,11 +99,14 @@ public final class LayerTracker {
 		for (int k = 0; k < layout.floorCount; k++) {
 			int floorTop = layout.floorTop(k);
 			if (y <= floorTop || y > floorTop + layout.hallHeight) continue;
-			BlockPos hole = new BlockPos(layout.holeX(seed, k, bounds), floorTop, layout.holeZ(seed, k, bounds));
+			BlockPos hole = new BlockPos(VaultPlan.holeX(level, layout, bounds, k), floorTop, VaultPlan.holeZ(level, layout, bounds, k));
 			if (Math.abs(player.getBlockX() - hole.getX()) > HINT_RADIUS || Math.abs(player.getBlockZ() - hole.getZ()) > HINT_RADIUS) continue;
 			BlockState state = level.getBlockState(hole);
 			if (state.is(ModContent.NETHER_SEAL)) {
 				return Component.translatableWithFallback("antcraft.hint.sealed", "Sealed — a Nether Key opens it");
+			}
+			if (state.is(ModContent.EMBER_SEAL)) {
+				return Component.translatableWithFallback("antcraft.hint.ember_sealed", "Sealed — an Ember Key opens it");
 			}
 			if (state.is(ModContent.ANCIENT_SEAL)) {
 				return Component.translatableWithFallback("antcraft.hint.ancient_sealed", "Sealed — an Ancient Key opens it");

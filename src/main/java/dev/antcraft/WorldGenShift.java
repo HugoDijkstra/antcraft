@@ -55,6 +55,29 @@ public final class WorldGenShift {
 		}
 	}
 
+	/**
+	 * The Trial Vault's start (spec 3.5.2): the jigsaw keeps its free space inside the strip around
+	 * the start piece; {@code rotation} (if set) replaces the start piece's random rotation.
+	 */
+	public record VaultContext(StripBounds bounds, int vaultZ, int margin, int maxY, net.minecraft.world.level.block.@org.jspecify.annotations.Nullable Rotation rotation, int depth) {}
+
+	private static final ThreadLocal<VaultContext> VAULT = new ThreadLocal<>();
+
+	public static @Nullable VaultContext vault() {
+		return VAULT.get();
+	}
+
+	public static <T> T withVault(VaultContext context, java.util.function.Supplier<T> body) {
+		VaultContext previous = VAULT.get();
+		VAULT.set(context);
+		try {
+			return body.get();
+		} finally {
+			if (previous == null) VAULT.remove();
+			else VAULT.set(previous);
+		}
+	}
+
 	public static int monumentDy() {
 		Integer dy = MONUMENT_DY.get();
 		return dy == null ? 0 : dy;

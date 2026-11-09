@@ -9,7 +9,7 @@
     },
     "description": {
       "translate": "advancements.antcraft.root.description",
-      "fallback": "A narrow strip of world, two thousand blocks deep"
+      "fallback": "A narrow strip of world, thousands of blocks deep"
     },
     "background": "minecraft:gui/advancements/backgrounds/stone",
     "show_toast": false,

@@ -1,0 +1,26 @@
+{
+  "parent": "antcraft:layer_4",
+  "display": {
+    "icon": {
+      "id": "minecraft:pale_oak_sapling"
+    },
+    "title": {
+      "translate": "advancements.antcraft.layer_pale_hollow.title",
+      "fallback": "Pale Hollow"
+    },
+    "description": {
+      "translate": "advancements.antcraft.layer_pale_hollow.description",
+      "fallback": "Reach the eerie white forest of the Pale Hollow"
+    }
+  },
+  "criteria": {
+    "reached": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "reached"
+    ]
+  ]
+}

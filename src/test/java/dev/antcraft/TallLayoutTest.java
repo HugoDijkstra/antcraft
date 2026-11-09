@@ -71,7 +71,7 @@ class TallLayoutTest {
 		assertEquals(13, L.ancientSealedFloor);
 		assertEquals(16, L.emberSealedFloor);
 		assertEquals(7, L.vaultLayer);
-		assertEquals(385, L.vaultStartY);
+		assertEquals(377, L.vaultStartY); // spec 385, lowered by 8 by the 3.5.6 gate
 		assertEquals(List.of(0, 2, 4, 8, 11, 14, 18), java.util.Arrays.stream(L.guardianFloors()).boxed().toList());
 		assertEquals(GuardianId.EMBER_LORD, L.guardian(18));
 		assertEquals(14, L.desertLayer);
@@ -143,8 +143,8 @@ class TallLayoutTest {
 		assertEquals(4, L.layer(4).ores().get(10).count(4)); // bonus gold
 		assertEquals(13, L.layer(18).ores().size());
 		assertSame(main, L.layer(1).ores());
-		assertEquals(0.4, L.layer(1).dungeonRate(), 1e-9);
-		assertEquals(3.0, L.layer(19).dungeonRate(), 1e-9);
+		assertEquals(2.0, L.layer(1).dungeonRate(), 1e-9);
+		assertEquals(12.0, L.layer(19).dungeonRate(), 1e-9); // rooms per 20x300 strip, tuned (3.9)
 		assertEquals(0.0, L.layer(7).dungeonRate());
 	}
 }

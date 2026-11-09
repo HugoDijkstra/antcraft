@@ -14,9 +14,9 @@ import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.material.MapColor;
 
 /**
- * AntCraft's own blocks and items: the seals on the floor holes (Nether Seal on floor 4, Ancient
- * Seal on floor 7, Guardian Seals on the boss-room floors 0, 2 and 6), the boss rooms' gates, and
- * the keys.
+ * AntCraft's own blocks and items: the seals on the floor holes (layout 1: Nether Seal on floor 4,
+ * Ancient Seal on floor 7, Guardian Seals on the boss-room floors 0, 2 and 6; tall worlds add the
+ * Ember Seal), the boss rooms' gates, and the keys.
  */
 public final class ModContent {
 	private ModContent() {}
@@ -33,6 +33,14 @@ public final class ModContent {
 		unbreakable(ANCIENT_SEAL_KEY).mapColor(MapColor.COLOR_CYAN).sound(SoundType.SCULK_CATALYST).lightLevel(state -> 7),
 		() -> ModContent.ANCIENT_KEY,
 		"opened_ancient_seal"
+	);
+
+	/** Tall worlds: floor 16, opened by the Ember Key from the Nether's Ember Forge. */
+	public static final ResourceKey<Block> EMBER_SEAL_KEY = blockKey("ember_seal");
+	public static final Block EMBER_SEAL = new SealBlock(
+		unbreakable(EMBER_SEAL_KEY).mapColor(MapColor.COLOR_ORANGE).sound(SoundType.NETHER_BRICKS).lightLevel(state -> 11),
+		() -> ModContent.EMBER_KEY,
+		"opened_ember_seal"
 	);
 
 	public static final ResourceKey<Block> GUARDIAN_SEAL_KEY = blockKey("guardian_seal");
@@ -56,6 +64,7 @@ public final class ModContent {
 
 	public static final Item NETHER_SEAL_ITEM = blockItem(NETHER_SEAL_KEY, NETHER_SEAL);
 	public static final Item ANCIENT_SEAL_ITEM = blockItem(ANCIENT_SEAL_KEY, ANCIENT_SEAL);
+	public static final Item EMBER_SEAL_ITEM = blockItem(EMBER_SEAL_KEY, EMBER_SEAL);
 	public static final Item GUARDIAN_SEAL_ITEM = blockItem(GUARDIAN_SEAL_KEY, GUARDIAN_SEAL);
 	public static final Item ARENA_GATE_ITEM = blockItem(ARENA_GATE_KEY, ARENA_GATE);
 	public static final Item TELEPORTER_ITEM = blockItem(TELEPORTER_KEY, TELEPORTER);
@@ -65,6 +74,9 @@ public final class ModContent {
 
 	public static final ResourceKey<Item> ANCIENT_KEY_KEY = ResourceKey.create(Registries.ITEM, id("ancient_key"));
 	public static final Item ANCIENT_KEY = new Item(new Item.Properties().setId(ANCIENT_KEY_KEY).stacksTo(1).rarity(Rarity.EPIC).fireResistant());
+
+	public static final ResourceKey<Item> EMBER_KEY_KEY = ResourceKey.create(Registries.ITEM, id("ember_key"));
+	public static final Item EMBER_KEY = new Item(new Item.Properties().setId(EMBER_KEY_KEY).stacksTo(1).rarity(Rarity.EPIC).fireResistant());
 
 	private static Identifier id(String path) {
 		return Identifier.fromNamespaceAndPath(AntCraft.MOD_ID, path);
@@ -87,16 +99,19 @@ public final class ModContent {
 	public static void register() {
 		Registry.register(BuiltInRegistries.BLOCK, NETHER_SEAL_KEY, NETHER_SEAL);
 		Registry.register(BuiltInRegistries.BLOCK, ANCIENT_SEAL_KEY, ANCIENT_SEAL);
+		Registry.register(BuiltInRegistries.BLOCK, EMBER_SEAL_KEY, EMBER_SEAL);
 		Registry.register(BuiltInRegistries.BLOCK, GUARDIAN_SEAL_KEY, GUARDIAN_SEAL);
 		Registry.register(BuiltInRegistries.BLOCK, ARENA_GATE_KEY, ARENA_GATE);
 		Registry.register(BuiltInRegistries.BLOCK, TELEPORTER_KEY, TELEPORTER);
 		registerBlockItem(NETHER_SEAL_KEY, NETHER_SEAL_ITEM);
 		registerBlockItem(ANCIENT_SEAL_KEY, ANCIENT_SEAL_ITEM);
+		registerBlockItem(EMBER_SEAL_KEY, EMBER_SEAL_ITEM);
 		registerBlockItem(GUARDIAN_SEAL_KEY, GUARDIAN_SEAL_ITEM);
 		registerBlockItem(ARENA_GATE_KEY, ARENA_GATE_ITEM);
 		registerBlockItem(TELEPORTER_KEY, TELEPORTER_ITEM);
 		Registry.register(BuiltInRegistries.ITEM, NETHER_KEY_KEY, NETHER_KEY);
 		Registry.register(BuiltInRegistries.ITEM, ANCIENT_KEY_KEY, ANCIENT_KEY);
+		Registry.register(BuiltInRegistries.ITEM, EMBER_KEY_KEY, EMBER_KEY);
 	}
 
 	private static void registerBlockItem(ResourceKey<Block> blockKey, Item item) {

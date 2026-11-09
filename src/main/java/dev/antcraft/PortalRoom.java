@@ -60,6 +60,12 @@ public final class PortalRoom {
 	}
 
 	/** Positions of block-entity blocks, relative to the seed. */
+	/** The room's box, shell included. */
+	public static net.minecraft.world.level.levelgen.structure.BoundingBox box(long seed, StripBounds bounds, StripLayout layout) {
+		int cz = layout.portalRoomZ(seed, bounds), floorY = layout.portalRoomFloorY();
+		return new net.minecraft.world.level.levelgen.structure.BoundingBox(minX(bounds), floorY, cz - HALF_LENGTH, maxX(bounds), floorY + HEIGHT, cz + HALF_LENGTH - 1);
+	}
+
 	static BlockPos spawnerPos(long seed, StripBounds bounds, StripLayout layout) {
 		return new BlockPos(portalX(bounds), layout.portalRoomFloorY() + 1, layout.portalRoomZ(seed, bounds) + 5);
 	}

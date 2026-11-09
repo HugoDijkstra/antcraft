@@ -1,0 +1,33 @@
+{
+  "parent": "antcraft:layer_7",
+  "display": {
+    "icon": {
+      "id": "antcraft:ember_key"
+    },
+    "title": {
+      "translate": "advancements.antcraft.ember_key.title",
+      "fallback": "Key of Embers"
+    },
+    "description": {
+      "translate": "advancements.antcraft.ember_key.description",
+      "fallback": "Get an Ember Key from the Ember Forge deep in the Nether"
+    }
+  },
+  "criteria": {
+    "has_key": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": "antcraft:ember_key"
+          }
+        ]
+      }
+    }
+  },
+  "requirements": [
+    [
+      "has_key"
+    ]
+  ]
+}

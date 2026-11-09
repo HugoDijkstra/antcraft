@@ -1,0 +1,27 @@
+{
+  "parent": "antcraft:layer_ember_rift",
+  "display": {
+    "icon": {
+      "id": "minecraft:netherite_sword"
+    },
+    "title": {
+      "translate": "advancements.antcraft.guardian_ember_lord.title",
+      "fallback": "Embers Out"
+    },
+    "description": {
+      "translate": "advancements.antcraft.guardian_ember_lord.description",
+      "fallback": "Defeat the Ember Lord guarding floor 18"
+    },
+    "frame": "challenge"
+  },
+  "criteria": {
+    "defeated": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "defeated"
+    ]
+  ]
+}

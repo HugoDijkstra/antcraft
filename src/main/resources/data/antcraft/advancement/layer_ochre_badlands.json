@@ -1,0 +1,26 @@
+{
+  "parent": "antcraft:layer_2",
+  "display": {
+    "icon": {
+      "id": "minecraft:red_sand"
+    },
+    "title": {
+      "translate": "advancements.antcraft.layer_ochre_badlands.title",
+      "fallback": "Ochre Badlands"
+    },
+    "description": {
+      "translate": "advancements.antcraft.layer_ochre_badlands.description",
+      "fallback": "Reach the terracotta canyons of the Ochre Badlands"
+    }
+  },
+  "criteria": {
+    "reached": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "reached"
+    ]
+  ]
+}

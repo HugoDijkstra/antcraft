@@ -72,8 +72,7 @@ public enum GuardianId {
 
 	/**
 	 * Equipment and permanent effects, after the attributes are set. Layout 1's three guardians get
-	 * exactly what they always had (Tunnel Captain: iron axe; Desert Colossus: Strength II). The
-	 * others are filled in when their layouts generate them.
+	 * exactly what they always had (Tunnel Captain: iron axe; Desert Colossus: Strength II).
 	 */
 	public void outfit(Mob mob, int layoutId) {
 		switch (this) {
@@ -85,7 +84,37 @@ public enum GuardianId {
 				mob.addEffect(new MobEffectInstance(MobEffects.STRENGTH, MobEffectInstance.INFINITE_DURATION, 1));
 				if (layoutId >= 2) mob.addEffect(new MobEffectInstance(MobEffects.RESISTANCE, MobEffectInstance.INFINITE_DURATION, 0));
 			}
-			default -> {}
+			case CANYON_CONJURER, GALE_LORD -> mob.addEffect(new MobEffectInstance(MobEffects.RESISTANCE, MobEffectInstance.INFINITE_DURATION, 0));
+			case BROOD_MOTHER -> {
+				mob.addEffect(new MobEffectInstance(MobEffects.SPEED, MobEffectInstance.INFINITE_DURATION, 0));
+				mob.addEffect(new MobEffectInstance(MobEffects.STRENGTH, MobEffectInstance.INFINITE_DURATION, 0));
+			}
+			case EMBER_LORD -> {
+				ItemStack sword = new ItemStack(Items.NETHERITE_SWORD);
+				mob.level().registryAccess().lookupOrThrow(net.minecraft.core.registries.Registries.ENCHANTMENT)
+					.get(net.minecraft.world.item.enchantment.Enchantments.FIRE_ASPECT)
+					.ifPresent(fireAspect -> sword.enchant(fireAspect, 1));
+				mob.setItemSlot(EquipmentSlot.MAINHAND, sword);
+				mob.setDropChance(EquipmentSlot.MAINHAND, 0.0F);
+				mob.addEffect(new MobEffectInstance(MobEffects.FIRE_RESISTANCE, MobEffectInstance.INFINITE_DURATION, 0));
+				mob.addEffect(new MobEffectInstance(MobEffects.RESISTANCE, MobEffectInstance.INFINITE_DURATION, 0));
+			}
+			case HOGLIN_WARLORD -> mob.addEffect(new MobEffectInstance(MobEffects.STRENGTH, MobEffectInstance.INFINITE_DURATION, 0));
+			case MOLTEN_SOVEREIGN -> mob.addEffect(new MobEffectInstance(MobEffects.RESISTANCE, MobEffectInstance.INFINITE_DURATION, 0));
+			case BRUTE_WARLORD -> {
+				mob.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.NETHERITE_AXE));
+				mob.setDropChance(EquipmentSlot.MAINHAND, 0.0F);
+				mob.addEffect(new MobEffectInstance(MobEffects.STRENGTH, MobEffectInstance.INFINITE_DURATION, 0));
+			}
+			case BONE_COLOSSUS -> {
+				ItemStack bow = new ItemStack(Items.BOW);
+				mob.level().registryAccess().lookupOrThrow(net.minecraft.core.registries.Registries.ENCHANTMENT)
+					.get(net.minecraft.world.item.enchantment.Enchantments.POWER)
+					.ifPresent(power -> bow.enchant(power, 2));
+				mob.setItemSlot(EquipmentSlot.MAINHAND, bow);
+				mob.setDropChance(EquipmentSlot.MAINHAND, 0.0F);
+				mob.addEffect(new MobEffectInstance(MobEffects.RESISTANCE, MobEffectInstance.INFINITE_DURATION, 0));
+			}
 		}
 	}
 

@@ -28,6 +28,8 @@ public final class AntCraftConfig {
 	public boolean guardians = true;
 	public boolean netherKeyGate = true;
 	public boolean ancientKeyGate = true;
+	/** Tall worlds: seal floor 16's hole until an Ember Key (from the Nether's Ember Forge) is used. */
+	public boolean emberKeyGate = true;
 	/** Download new AntCraft releases from GitHub on start ({@link AutoUpdater}). */
 	public boolean autoUpdate = true;
 

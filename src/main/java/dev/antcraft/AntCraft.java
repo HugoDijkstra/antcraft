@@ -46,6 +46,7 @@ public final class AntCraft implements ModInitializer {
 		LayerTracker.register();
 		ArenaManager.register();
 		SelfCheck.register();
+		TallAdvancements.register();
 
 		// Backup source of the Nether Key: fortress chests (the shrine in the Nether strip always has one).
 		// Added when the loot is rolled rather than to the table, so vanilla worlds don't get the key.
@@ -60,7 +61,11 @@ public final class AntCraft implements ModInitializer {
 			}
 		});
 
-		ServerLifecycleEvents.SERVER_STARTING.register(server -> FrameTerrain.setFallbackFactory(server.registryAccess()));
+		ServerLifecycleEvents.SERVER_STARTING.register(server -> {
+			FrameTerrain.setFallbackFactory(server.registryAccess());
+			VaultPlan.loadTable(server.getStructureTemplateManager());
+		});
+		ServerLifecycleEvents.SERVER_STOPPED.register(server -> VaultPlan.clearRuntimeCache());
 		net.fabricmc.fabric.api.event.lifecycle.v1.ServerLevelEvents.LOAD.register((server, level) -> checkLayoutHeight(level));
 		ServerLifecycleEvents.SERVER_STARTED.register(AntCraft::onServerStarted);
 		ServerTickEvents.END_SERVER_TICK.register(AntCraft::onServerTick);
@@ -102,7 +107,8 @@ public final class AntCraft implements ModInitializer {
 		StripBounds bounds = Strip.bounds(overworld);
 		StripLayout layout = Strip.layout(overworld);
 		if (layout != null) {
-			LOGGER.info("AntCraft strip world: {} x {} strip {}, layout {}, holes at {}", bounds.width(), bounds.length(), bounds, layout.id, describeHoles(layout, seed, bounds));
+			LOGGER.info("AntCraft strip world: {} x {} strip {}, layout {}, holes at {}", bounds.width(), bounds.length(), bounds, layout.id, describeHoles(overworld, layout, seed, bounds));
+			if (layout.vaultLayer >= 1) LOGGER.info("AntCraft: trial vault {}", VaultPlan.get(overworld));
 		}
 
 		// Respawning picks a random spot within this radius; outside the strip there is only void (and wall tops).
@@ -184,11 +190,11 @@ public final class AntCraft implements ModInitializer {
 		return level.getBlockState(below).isSolid() && level.getFluidState(below).isEmpty() && level.getBlockState(feet).isAir();
 	}
 
-	private static String describeHoles(StripLayout layout, long seed, StripBounds bounds) {
+	private static String describeHoles(ServerLevel level, StripLayout layout, long seed, StripBounds bounds) {
 		StringBuilder sb = new StringBuilder();
 		for (int k = 0; k < layout.floorCount; k++) {
 			if (k > 0) sb.append(", ");
-			sb.append('(').append(layout.holeX(seed, k, bounds)).append(' ').append(layout.floorTop(k)).append(' ').append(layout.holeZ(seed, k, bounds)).append(')');
+			sb.append('(').append(VaultPlan.holeX(level, layout, bounds, k)).append(' ').append(layout.floorTop(k)).append(' ').append(VaultPlan.holeZ(level, layout, bounds, k)).append(')');
 		}
 		return sb.toString();
 	}

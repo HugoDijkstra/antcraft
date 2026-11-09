@@ -1,0 +1,27 @@
+{
+  "parent": "antcraft:layer_trial_vault",
+  "display": {
+    "icon": {
+      "id": "minecraft:heavy_core"
+    },
+    "title": {
+      "translate": "advancements.antcraft.trial_vault_escaped.title",
+      "fallback": "Out of the Vault"
+    },
+    "description": {
+      "translate": "advancements.antcraft.trial_vault_escaped.description",
+      "fallback": "Find the deepest chamber of the Trial Vault and climb out below it"
+    },
+    "frame": "goal"
+  },
+  "criteria": {
+    "escaped": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "escaped"
+    ]
+  ]
+}

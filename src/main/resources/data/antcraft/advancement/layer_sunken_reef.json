@@ -1,0 +1,26 @@
+{
+  "parent": "antcraft:layer_6",
+  "display": {
+    "icon": {
+      "id": "minecraft:brain_coral"
+    },
+    "title": {
+      "translate": "advancements.antcraft.layer_sunken_reef.title",
+      "fallback": "Sunken Reef"
+    },
+    "description": {
+      "translate": "advancements.antcraft.layer_sunken_reef.description",
+      "fallback": "Reach the underground sea of the Sunken Reef"
+    }
+  },
+  "criteria": {
+    "reached": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "reached"
+    ]
+  ]
+}

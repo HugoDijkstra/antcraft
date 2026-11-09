@@ -71,6 +71,9 @@ public final class DeepTerrain {
 	private final SimplexNoise pillar;
 	private final SimplexNoise fluid;
 	private final SimplexNoise mud;
+	/** Tall layouts: spires (hoodoos, pinnacles, ice spikes) and the reef's islands. */
+	private final SimplexNoise spire;
+	private final SimplexNoise island;
 
 	private DeepTerrain(long seed, StripBounds bounds, StripLayout layout) {
 		this.seed = seed;
@@ -103,6 +106,9 @@ public final class DeepTerrain {
 		this.pillar = new SimplexNoise(random);
 		this.fluid = new SimplexNoise(random);
 		this.mud = new SimplexNoise(random);
+		// appended after the original noises: they keep their exact sequence
+		this.spire = new SimplexNoise(random);
+		this.island = new SimplexNoise(random);
 	}
 
 	public long seed() {
@@ -171,11 +177,17 @@ public final class DeepTerrain {
 	 * Village columns are flattened separately during terrain generation.
 	 */
 	public int surfaceAt(int layer, int x, int z) {
-		if (this.spec(layer).theme().isWater()) return this.forestSurface(layer, x, z); // a sea: no ponds
+		if (this.spec(layer).theme().isWater()) return this.forestSurface(layer, x, z) + this.islandLift(layer, x, z); // a sea: no ponds
 		if (this.isPond(layer, x, z) || this.isPond(layer, x + 1, z) || this.isPond(layer, x - 1, z) || this.isPond(layer, x, z + 1) || this.isPond(layer, x, z - 1)) {
 			return this.pondLevel(layer);
 		}
 		return this.forestSurface(layer, x, z);
+	}
+
+	/** How far a sea layer's islands rise above its bed (0 in open water); islands reach above the water line. */
+	public int islandLift(int layer, int x, int z) {
+		double v = n2(this.island, layer, x, z, 0.03) - 0.5;
+		return v <= 0.0 ? 0 : Math.min(14, (int) (v * 50.0));
 	}
 
 	/** Water surface of a sea layer ({@link LayerTheme#isWater}): forest floor + 8. */
@@ -193,17 +205,40 @@ public final class DeepTerrain {
 	 * layer {@code layer} (floor layer - 1), i.e. right under where you come down into this layer.
 	 */
 	public boolean nearHoleAbove(int layer, int x, int z, int radius) {
-		if (layer < 1 || layer > this.layout.deepLayers) return false;
-		int k = layer - 1;
-		return Math.abs(x - this.layout.holeX(this.seed, k, this.bounds)) <= radius && Math.abs(z - this.layout.holeZ(this.seed, k, this.bounds)) <= radius;
+		return this.nearHoleAbove(layer, x, z, radius, null);
 	}
 
-	private boolean isPillar(int layer, int x, int z) {
+	/** Like {@link #nearHoleAbove(int, int, int, int)}; the Trial Vault's two floors take their holes from {@code vault}. */
+	public boolean nearHoleAbove(int layer, int x, int z, int radius, @Nullable VaultPlan vault) {
+		if (layer < 1 || layer > this.layout.deepLayers) return false;
+		int k = layer - 1;
+		int hx = this.holeX(k, vault);
+		if (hx == Integer.MIN_VALUE) return false;
+		return Math.abs(x - hx) <= radius && Math.abs(z - this.holeZ(k, vault)) <= radius;
+	}
+
+	/** True for the floors whose hole comes from the Trial Vault (tall layouts: floors 6 and 7). */
+	public boolean isVaultFloor(int k) {
+		return this.layout.vaultLayer >= 1 && (k == this.layout.vaultLayer - 1 || k == this.layout.vaultLayer);
+	}
+
+	/** Hole of floor k; the vault floors' from the plan, MIN_VALUE without one (no hole cut there). */
+	public int holeX(int k, @Nullable VaultPlan vault) {
+		if (this.isVaultFloor(k)) return vault != null ? vault.holeX(this.layout, k) : Integer.MIN_VALUE;
+		return this.layout.holeX(this.seed, k, this.bounds);
+	}
+
+	public int holeZ(int k, @Nullable VaultPlan vault) {
+		if (this.isVaultFloor(k)) return vault != null ? vault.holeZ(this.layout, k) : Integer.MIN_VALUE;
+		return this.layout.holeZ(this.seed, k, this.bounds);
+	}
+
+	private boolean isPillar(int layer, int x, int z, @Nullable VaultPlan vault) {
 		for (int k = 0; k < this.layout.floorCount; k++) {
 			// never block the way to a hole
-			if (this.layout.floorTop(k) + 1 == this.layout.hallBottom(layer)
-				&& Math.abs(x - this.layout.holeX(this.seed, k, this.bounds)) <= 2 && Math.abs(z - this.layout.holeZ(this.seed, k, this.bounds)) <= 2) {
-				return false;
+			if (this.layout.floorTop(k) + 1 == this.layout.hallBottom(layer)) {
+				int hx = this.holeX(k, vault);
+				if (hx != Integer.MIN_VALUE && Math.abs(x - hx) <= 2 && Math.abs(z - this.holeZ(k, vault)) <= 2) return false;
 			}
 		}
 		return n2(this.pillar, layer, x, z, 0.18) > 0.72;
@@ -260,7 +295,11 @@ public final class DeepTerrain {
 	private BlockState stoneAt(int layer, int x, int y, int z) {
 		double p = this.patch.get(x * 0.05, y * 0.07, z * 0.05);
 		LayerSpec spec = this.spec(layer);
-		if (p <= spec.patchThreshold()) return spec.baseStone();
+		if (p <= spec.patchThreshold()) {
+			// the Ember Rift's blackstone is flecked with gold
+			if (spec.theme() == LayerTheme.EMBER_RIFT && this.hash01(x, y, z, 9600) < 0.02) return Blocks.GILDED_BLACKSTONE.defaultBlockState();
+			return spec.baseStone();
+		}
 		return spec.theme() == LayerTheme.OCHRE_BADLANDS ? BADLANDS_BANDS[Math.floorMod(y, 12) / 2] : spec.patchStone();
 	}
 
@@ -283,7 +322,7 @@ public final class DeepTerrain {
 	}
 
 	/** Small per-block hash in [0, 1). */
-	private double hash01(int x, int y, int z, int salt) {
+	double hash01(int x, int y, int z, int salt) {
 		long h = Strip.mix(this.seed ^ ((long) x * 341873128712L + (long) z * 132897987541L + (long) y * 1664525L), salt);
 		return (h >>> 11) * 0x1.0p-53;
 	}
@@ -296,7 +335,7 @@ public final class DeepTerrain {
 			set(chunk, lx, y, lz, BEDROCK);
 		}
 		int hallBottom = this.layout.hallBottom(0);
-		boolean pillar = this.isPillar(0, x, z);
+		boolean pillar = this.isPillar(0, x, z, null);
 		for (int y = hallBottom; y < hallBottom + this.layout.hallHeight; y++) {
 			set(chunk, lx, y, lz, pillar ? DEEPSLATE : AIR);
 		}
@@ -309,7 +348,7 @@ public final class DeepTerrain {
 	}
 
 	/** Fills one strip column from the world bottom up to the first floor. */
-	public void fillColumn(ChunkAccess chunk, int lx, int lz, int x, int z, List<BoundingBox> cityPieces) {
+	public void fillColumn(ChunkAccess chunk, int lx, int lz, int x, int z, List<BoundingBox> cityPieces, @Nullable VaultPlan vault) {
 		for (int y = this.layout.worldMinY; y <= this.layout.bottomTopY; y++) {
 			set(chunk, lx, y, lz, BEDROCK);
 		}
@@ -319,11 +358,11 @@ public final class DeepTerrain {
 			}
 		}
 		for (int layer = 1; layer <= this.layout.deepLayers; layer++) {
-			this.fillLayer(chunk, lx, lz, x, z, layer, cityPieces);
+			this.fillLayer(chunk, lx, lz, x, z, layer, cityPieces, vault);
 		}
 	}
 
-	private void fillLayer(ChunkAccess chunk, int lx, int lz, int x, int z, int layer, List<BoundingBox> deepPieces) {
+	private void fillLayer(ChunkAccess chunk, int lx, int lz, int x, int z, int layer, List<BoundingBox> deepPieces, @Nullable VaultPlan vault) {
 		LayerSpec spec = this.spec(layer);
 		LayerTheme theme = spec.theme();
 		int bottom = this.layout.layerBottom(layer);
@@ -337,15 +376,21 @@ public final class DeepTerrain {
 		boolean sea = theme.isWater();
 		int waterLine = this.waterLine(layer);
 		int hallTop = bottom + this.layout.hallHeight - 1;
-		boolean pillar = this.isPillar(layer, x, z);
+		boolean pillar = this.isPillar(layer, x, z, vault);
 
 		// Deep structure pieces near this column: villages sit in the forest band, the ancient city
 		// (layer 5 only) below it.
 		int forestFloor = this.layout.forestFloor(layer);
 		List<BoundingBox> pieces = new ArrayList<>();
 		boolean village = false;
+		// buried pieces (trail ruins, the igloo basement) keep solid stone around them: no Beardifier down here
+		int buriedMin = Integer.MAX_VALUE, buriedMax = Integer.MIN_VALUE;
 		for (BoundingBox box : deepPieces) {
 			if (box.maxY() < bottom || box.minY() > top) continue;
+			if (DeepBox.isBuried(box) && x >= box.minX() - 2 && x <= box.maxX() + 2 && z >= box.minZ() - 2 && z <= box.maxZ() + 2) {
+				buriedMin = Math.min(buriedMin, box.minY() - 2);
+				buriedMax = Math.max(buriedMax, box.maxY() + 2);
+			}
 			boolean inForest = box.maxY() >= forestFloor - 12;
 			int margin = inForest ? 3 : 2;
 			if (x < box.minX() - margin || x > box.maxX() + margin || z < box.minZ() - margin || z > box.maxZ() + margin) continue;
@@ -354,7 +399,8 @@ public final class DeepTerrain {
 		}
 
 		// villages get a flat floor without ponds (it's what their layout was computed against)
-		boolean pond = !village && !sea && this.isPond(layer, x, z);
+		boolean buried = buriedMin <= buriedMax;
+		boolean pond = !village && !buried && !sea && this.isPond(layer, x, z);
 		int surface = village ? forestFloor : this.surfaceAt(layer, x, z);
 		int ceil = this.forestCeiling(layer, x, z);
 		double pondDepth = this.pondValue(layer, x, z);
@@ -369,6 +415,10 @@ public final class DeepTerrain {
 		double fluidValue = n2(this.fluid, layer, x, z, 0.04);
 		BlockState puddle = spec.puddle() == LayerSpec.Puddle.WATER_OR_LAVA ? (fluidValue > 0.0 ? WATER : LAVA) : LAVA;
 		boolean puddleColumn = Math.abs(fluidValue) > 0.62;
+		boolean underHole = this.nearHoleAbove(layer, x, z, 2, vault);
+		// tall layouts: hoodoos, pinnacles and ice spikes standing in the forest
+		int spireTop = village || pond || buried || this.nearHoleAbove(layer, x, z, 3, vault) ? Integer.MIN_VALUE : this.spireTop(layer, theme, x, z, surface, ceil);
+		boolean lavaFall = theme == LayerTheme.EMBER_RIFT && !village && !underHole && this.hash01(x, 0, z, 9500 + layer) < 0.0035;
 
 		// Ancient city: like vanilla's "beard_box" terrain adaptation, the city's pieces (collected
 		// above) get their space cleared plus a solid foundation; only around the pieces, so there is
@@ -386,7 +436,7 @@ public final class DeepTerrain {
 				state = pillar ? spec.baseStone() : AIR;
 			} else if (y >= surface - 4 && y <= surface) {
 				if (pond && y == surface) {
-					state = WATER;
+					state = theme == LayerTheme.FROZEN_DEPTHS ? Blocks.ICE.defaultBlockState() : WATER;
 				} else if (pond && y == surface - 1) {
 					state = pondDepth > 0.15 ? WATER : spec.pondBottom();
 				} else if (pond && y == surface - 2) {
@@ -398,7 +448,7 @@ public final class DeepTerrain {
 				}
 				// tunnels from the caves may open into the forest floor (but not under a pond or the sea)
 				boolean pondZone = nearPond && y >= pondLevel - 4;
-				if (y < surface - 1 && !pondZone && !theme.isDesert() && !sea && this.noodleOnly(x, y, z)) state = AIR;
+				if (y < surface - 1 && !pondZone && !theme.isDesert() && !sea && !buried && this.noodleOnly(x, y, z)) state = AIR;
 			} else if (y > surface && y < ceil) {
 				if (sea && y <= waterLine) {
 					// enclosed by the seabed, the walls and air: no fluid tick needed (raw write)
@@ -406,9 +456,11 @@ public final class DeepTerrain {
 					below = false;
 					continue;
 				}
-				state = AIR;
+				state = y <= spireTop ? this.spireBlock(layer, theme, x, y, z) : AIR;
 			} else if (y >= ceil && y <= ceil + 2) {
-				if (y == ceil && glowValue > glowThreshold) {
+				if (y == ceil && lavaFall) {
+					state = LAVA; // a lava fall from the ceiling (it flows once the chunk ticks)
+				} else if (y == ceil && glowValue > glowThreshold) {
 					state = spec.lightBlock();
 				} else {
 					state = this.stoneAt(layer, x, y, z);
@@ -418,7 +470,8 @@ public final class DeepTerrain {
 				boolean nearForest = y >= surface - 9 && y <= ceil + 6;
 				boolean pondZone = nearPond && y >= pondLevel - 6 && y <= pondLevel + 1;
 				// under the sea nothing is carved within 9 blocks of the seabed, or the sea would drain
-				boolean carved = pondZone || (sea && nearForest && y < surface) ? false : nearForest ? this.noodleOnly(x, y, z) : this.carvedCave(layer, x, y, z);
+				boolean carved = pondZone || (sea && nearForest && y < surface) || (buried && y >= buriedMin && y <= buriedMax) ? false
+					: nearForest ? this.noodleOnly(x, y, z) : this.carvedCave(layer, x, y, z);
 				if (carved) {
 					state = below && puddleColumn && !nearForest ? puddle : AIR;
 				} else {
@@ -430,14 +483,49 @@ public final class DeepTerrain {
 		}
 
 		// hanging glowstone "suns" below the forest ceiling
-		boolean underHole = this.nearHoleAbove(layer, x, z, 2);
-		if (glowValue > hangThreshold && !underHole) {
+		if (glowValue > hangThreshold && !underHole && spireTop == Integer.MIN_VALUE) {
 			int length = 1 + (int) ((glowValue - hangThreshold) * 16);
 			for (int i = 1; i <= length && ceil - i > surface + 6; i++) {
 				set(chunk, lx, ceil - i, lz, spec.lightBlock());
 			}
 		}
 		if (!underHole) this.decorateForestColumn(chunk, lx, lz, x, z, layer, surface, ceil, pond, ground);
+	}
+
+	/**
+	 * Top of a spire standing in this forest column, or MIN_VALUE: terracotta hoodoos in the Ochre
+	 * Badlands and packed-ice spikes in the Frozen Depths reach the ceiling; the Stony Crags'
+	 * pinnacles vary in height, with ledges on the walls. Other themes have none.
+	 */
+	private int spireTop(int layer, LayerTheme theme, int x, int z, int surface, int ceil) {
+		switch (theme) {
+			case OCHRE_BADLANDS -> {
+				return n2(this.spire, layer, x, z, 0.09) > 0.76 ? ceil - 1 : Integer.MIN_VALUE;
+			}
+			case FROZEN_DEPTHS -> {
+				return n2(this.spire, layer, x, z, 0.1) > 0.8 ? ceil - 1 : Integer.MIN_VALUE;
+			}
+			case STONY_CRAGS -> {
+				double v = n2(this.spire, layer, x, z, 0.08);
+				if (v > 0.62) return Math.min(ceil - 1, surface + 6 + (int) ((v - 0.62) / 0.3 * (ceil - surface)));
+				// ledges on the side walls
+				if (x - this.bounds.minX() <= 2 || this.bounds.maxX() - x <= 2) {
+					if (n2(this.spire, layer + 50, x, z, 0.15) > 0.15) return Math.min(ceil - 1, this.layout.forestFloor(layer) + 14);
+				}
+				return Integer.MIN_VALUE;
+			}
+			default -> {
+				return Integer.MIN_VALUE;
+			}
+		}
+	}
+
+	private BlockState spireBlock(int layer, LayerTheme theme, int x, int y, int z) {
+		return switch (theme) {
+			case OCHRE_BADLANDS -> BADLANDS_BANDS[Math.floorMod(y, 12) / 2];
+			case FROZEN_DEPTHS -> n2(this.spire, layer, x, z, 0.1) > 0.9 ? Blocks.BLUE_ICE.defaultBlockState() : Blocks.PACKED_ICE.defaultBlockState();
+			default -> Math.floorMod(y, 9) == 0 ? Blocks.CALCITE.defaultBlockState() : Blocks.STONE.defaultBlockState();
+		};
 	}
 
 	/** 1 = inside a city piece (air), 2 = foundation under a piece (solid), 0 = not city. */
@@ -573,12 +661,21 @@ public final class DeepTerrain {
 					if (plant != null && plant.is(Blocks.CACTUS)) {
 						// cactus breaks next to anything solid: only on open sand
 						boolean open = true;
+						// tall layouts: never where it would hurt (near a hole's landing or a structure)
+						if (this.layout.id >= 2 && (this.nearHoleAbove(layer, x, z, 6) || UndergroundForest.inVillage(this.layout, deepPieces, layer, x, z, 6))) open = false;
 						for (int[] o : new int[][] {{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
 							for (int dy = 1; dy <= 3; dy++) open &= level.getBlockState(at.set(x + o[0], surface + dy, z + o[1])).isAir();
 						}
 						int height = 1 + (int) (this.hash01(x, surface + 1, z, 13) * 3);
+						int top = surface;
 						for (int i = 1; open && i <= height && level.getBlockState(at.set(x, surface + i, z)).isAir(); i++) {
 							level.setBlock(at, plant, Block.UPDATE_CLIENTS);
+							top = surface + i;
+						}
+						// the Ochre Badlands' cacti flower
+						if (top > surface && this.spec(layer).theme() == LayerTheme.OCHRE_BADLANDS && this.hash01(x, top, z, 14) < 0.25
+							&& level.getBlockState(at.set(x, top + 1, z)).isAir()) {
+							level.setBlock(at, Blocks.CACTUS_FLOWER.defaultBlockState(), Block.UPDATE_CLIENTS);
 						}
 					} else if (plant != null && plant.is(Blocks.SUGAR_CANE)) {
 						int height = 1 + (int) (this.hash01(x, surface + 1, z, 12) * 3);
@@ -664,11 +761,12 @@ public final class DeepTerrain {
 	// ------------------------------------------------------------------ holes
 
 	/** Cuts the single hole through each floor that passes through this chunk, plus a ladder shaft and landing room. */
-	public void cutHoles(ChunkAccess chunk) {
+	public void cutHoles(ChunkAccess chunk, @Nullable VaultPlan vault) {
 		ChunkPos pos = chunk.getPos();
 		for (int k = 0; k < this.layout.floorCount; k++) {
-			int hx = this.layout.holeX(this.seed, k, this.bounds);
-			int hz = this.layout.holeZ(this.seed, k, this.bounds);
+			int hx = this.holeX(k, vault);
+			if (hx == Integer.MIN_VALUE) continue; // a vault floor in a chunk that does not reference the vault
+			int hz = this.holeZ(k, vault);
 			int floorBase = this.layout.floorBase(k);
 			int floorTop = this.layout.floorTop(k);
 			int layerBelow = k + 1;
@@ -730,6 +828,8 @@ public final class DeepTerrain {
 				seal = ModContent.NETHER_SEAL.defaultBlockState();
 			} else if (k == this.layout.ancientSealedFloor && config.ancientKeyGate) {
 				seal = ModContent.ANCIENT_SEAL.defaultBlockState();
+			} else if (k == this.layout.emberSealedFloor && config.emberKeyGate) {
+				seal = ModContent.EMBER_SEAL.defaultBlockState();
 			} else if (this.layout.isGuardianFloor(k) && config.guardians) {
 				seal = ModContent.GUARDIAN_SEAL.defaultBlockState();
 				this.buildArena(chunk, pos, k, hz);
@@ -740,37 +840,6 @@ public final class DeepTerrain {
 				setIfInChunk(chunk, pos, hx, y, hz, AIR);
 			}
 		}
-		if (this.layout.vaultLayer >= 1) this.cutVaultPassage(chunk, pos);
-	}
-
-	/**
-	 * Temporary (until the Trial Vault structure exists): a plain way through the solid vault layer.
-	 * A ladder shaft from the landing room under the floor above the vault straight down to the
-	 * vault's bottom rows, then a 2-high tunnel along x and then z to the hole of the floor below
-	 * (whose ladder runs through that floor as on every floor), lit by invisible lights.
-	 */
-	private void cutVaultPassage(ChunkAccess chunk, ChunkPos pos) {
-		int vault = this.layout.vaultLayer;
-		int ax = this.layout.holeX(this.seed, vault - 1, this.bounds), az = this.layout.holeZ(this.seed, vault - 1, this.bounds);
-		int bx = this.layout.holeX(this.seed, vault, this.bounds), bz = this.layout.holeZ(this.seed, vault, this.bounds);
-		int bottom = this.layout.layerBottom(vault);
-		int top = this.layout.floorBase(vault - 1) - 4; // the landing room's floor
-		// the ladder hangs on the block to its south, unless the tunnel leaves the shaft southwards
-		boolean southOpen = ax == bx && bz > az;
-		BlockState ladder = Blocks.LADDER.defaultBlockState().setValue(LadderBlock.FACING, Direction.NORTH);
-		BlockState ladderLow = southOpen ? Blocks.LADDER.defaultBlockState().setValue(LadderBlock.FACING, Direction.SOUTH) : ladder;
-		for (int y = bottom + 2; y <= top; y++) setIfInChunk(chunk, pos, ax, y, az, ladder);
-		for (int y = bottom; y <= bottom + 1; y++) setIfInChunk(chunk, pos, ax, y, az, ladderLow);
-		// the tunnel: x first (at az), then z (at bx)
-		int step = 0;
-		int dx = Integer.signum(bx - ax), dz = Integer.signum(bz - az);
-		for (int x = ax + dx; dx != 0 && x != bx + dx; x += dx) this.cutPassageCell(chunk, pos, x, az, bottom, step++);
-		for (int z = az + dz; dz != 0 && z != bz + dz; z += dz) this.cutPassageCell(chunk, pos, bx, z, bottom, step++);
-	}
-
-	private void cutPassageCell(ChunkAccess chunk, ChunkPos pos, int x, int z, int bottom, int step) {
-		setIfInChunk(chunk, pos, x, bottom, z, AIR);
-		setIfInChunk(chunk, pos, x, bottom + 1, z, step % 8 == 3 ? LIGHT_15 : AIR);
 	}
 
 	/**

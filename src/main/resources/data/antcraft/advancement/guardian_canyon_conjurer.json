@@ -1,0 +1,27 @@
+{
+  "parent": "antcraft:layer_ochre_badlands",
+  "display": {
+    "icon": {
+      "id": "minecraft:totem_of_undying"
+    },
+    "title": {
+      "translate": "advancements.antcraft.guardian_canyon_conjurer.title",
+      "fallback": "Spell Broken"
+    },
+    "description": {
+      "translate": "advancements.antcraft.guardian_canyon_conjurer.description",
+      "fallback": "Defeat the Canyon Conjurer guarding floor 4"
+    },
+    "frame": "challenge"
+  },
+  "criteria": {
+    "defeated": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "defeated"
+    ]
+  ]
+}

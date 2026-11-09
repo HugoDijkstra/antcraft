@@ -15,24 +15,7 @@
   },
   "criteria": {
     "reached": {
-      "trigger": "minecraft:location",
-      "conditions": {
-        "player": {
-          "type": "minecraft:entity_properties",
-          "entity": "this",
-          "predicate": {
-            "minecraft:location": {
-              "position": {
-                "y": {
-                  "min": -573.0,
-                  "max": -320.001
-                }
-              },
-              "dimension": "minecraft:overworld"
-            }
-          }
-        }
-      }
+      "trigger": "minecraft:impossible"
     }
   },
   "requirements": [

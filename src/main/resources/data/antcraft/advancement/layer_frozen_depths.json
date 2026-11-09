@@ -1,0 +1,26 @@
+{
+  "parent": "antcraft:layer_7",
+  "display": {
+    "icon": {
+      "id": "minecraft:packed_ice"
+    },
+    "title": {
+      "translate": "advancements.antcraft.layer_frozen_depths.title",
+      "fallback": "Frozen Depths"
+    },
+    "description": {
+      "translate": "advancements.antcraft.layer_frozen_depths.description",
+      "fallback": "Reach the Frozen Depths"
+    }
+  },
+  "criteria": {
+    "reached": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "reached"
+    ]
+  ]
+}

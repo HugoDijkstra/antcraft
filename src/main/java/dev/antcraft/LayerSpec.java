@@ -62,8 +62,11 @@ public record LayerSpec(
 	/** The forest floor's top block (the first four are layout 1's). */
 	public enum GroundPalette { GRASS, SAND, MUD_AND_GRASS, MYCELIUM, PODZOL_MIX, COARSE_MIX, RED_SAND, MOSS, PALE_MOSS, STONE_MIX, SCULK, SNOW, WARPED_NYLIUM }
 
-	/** Animals spawned in the forest at generation (NONE: a silent layer). */
-	public enum Animals { FARM, DESERT, MOOSHROOM, NONE }
+	/**
+	 * Animals spawned in the forest at generation (NONE: a silent layer). The first four are
+	 * layout 1's; the others belong to the tall layout's themes.
+	 */
+	public enum Animals { FARM, DESERT, MOOSHROOM, NONE, TAIGA, AUTUMN, BADLANDS, DARKWOOD, LUSH, JUNGLE, SAVANNA, CRAGS, CRYSTAL, REEF, SWAMP, FROZEN }
 
 	/** Hand-started mineshaft in the cave band. */
 	public enum Mineshaft { NONE, NORMAL, MESA }

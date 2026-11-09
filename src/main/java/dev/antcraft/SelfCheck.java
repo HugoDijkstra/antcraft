@@ -19,6 +19,7 @@ import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
+import net.minecraft.world.level.levelgen.structure.StructureStart;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -35,7 +36,13 @@ public final class SelfCheck {
 				.requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
 				.then(Commands.literal("selfcheck").executes(SelfCheck::run))
 				.then(Commands.literal("audit").requires(source -> StructureAudit.enabled())
-					.then(Commands.literal("structures").executes(StructureAudit::run)))
+					.then(Commands.literal("structures").executes(StructureAudit::run))
+					.then(Commands.literal("vault").then(Commands.argument("count", com.mojang.brigadier.arguments.IntegerArgumentType.integer(1, 1000))
+						.executes(c -> StructureAudit.vault(c, 0, 0))
+						.then(Commands.argument("width", com.mojang.brigadier.arguments.IntegerArgumentType.integer(4, 200))
+							.then(Commands.argument("length", com.mojang.brigadier.arguments.IntegerArgumentType.integer(16, 30000))
+								.executes(c -> StructureAudit.vault(c, com.mojang.brigadier.arguments.IntegerArgumentType.getInteger(c, "width"),
+									com.mojang.brigadier.arguments.IntegerArgumentType.getInteger(c, "length"))))))))
 		));
 	}
 
@@ -159,7 +166,13 @@ public final class SelfCheck {
 					for (int k : layout.guardianFloors()) this.checkBossRoom(layout, k);
 					this.checkLeaves(layout, strip);
 					this.checkPortalRoom(layout);
-					if (layout.id >= 2) this.checkLayerTable(layout);
+					if (layout.id >= 2) {
+						this.checkLayerTable(layout);
+						for (int l = 1; l <= layout.deepLayers; l++) this.checkLayer(layout, l, strip);
+						this.checkDeepStarts(layout);
+						this.checkVault(layout);
+						this.checkVillages(layout, strip);
+					}
 				}
 			}
 			this.checkWallsAndOutside(kind);
@@ -189,10 +202,233 @@ public final class SelfCheck {
 			this.report("layer table", bad.isEmpty(), layout.deepLayers + " rows distinct, placeholder band y 50..90 clear" + (bad.isEmpty() ? "" : "; bad " + bad));
 		}
 
+		// ------------------------------------------------------------------ per-layer content (tall layouts)
+
+		/**
+		 * One deep layer: its cave stone is the row's base/patch stone (plus ores), its forest floor
+		 * has the row's ground, the forest band is open air (the vault: solid), and the biome in the
+		 * forest is the row's forest biome.
+		 */
+		private void checkLayer(StripLayout layout, int l, List<LevelChunk> strip) {
+			LayerSpec row = layout.layer(l);
+			DeepTerrain terrain = DeepTerrain.forSeed(this.seed, this.bounds, layout);
+			int stone = 0, stoneOk = 0, ground = 0, groundOk = 0, air = 0, band = 0, biome = 0, biomeOk = 0;
+			BlockPos.MutableBlockPos at = new BlockPos.MutableBlockPos();
+			int ff = layout.forestFloor(l);
+			for (LevelChunk chunk : strip) {
+				ChunkPos pos = chunk.getPos();
+				for (int x = Math.max(pos.getMinBlockX(), this.bounds.minX()); x <= Math.min(pos.getMaxBlockX(), this.bounds.maxX()); x += 3) {
+					for (int z = Math.max(pos.getMinBlockZ(), this.bounds.minZ()); z <= Math.min(pos.getMaxBlockZ(), this.bounds.maxZ()); z += 3) {
+						// cave stone a little above the hall
+						for (int y = layout.layerBottom(l) + layout.hallHeight + 2; y < ff - 14; y += 5) {
+							BlockState state = chunk.getBlockState(at.set(x, y, z));
+							if (state.isAir() || !state.getFluidState().isEmpty()) continue;
+							stone++;
+							String n = name(state);
+							if (state == row.baseStone() || state == row.patchStone() || n.endsWith("_ore") || n.contains("terracotta") || state.is(Blocks.ANCIENT_DEBRIS)
+								|| state.is(Blocks.OBSIDIAN) || state.is(Blocks.GILDED_BLACKSTONE) || state.is(Blocks.COBBLESTONE) || state.is(Blocks.MOSSY_COBBLESTONE)
+								|| state.is(Blocks.SCULK) || state.is(Blocks.SCULK_VEIN) || state.is(Blocks.CALCITE) || state.is(Blocks.SMOOTH_BASALT) || state.is(Blocks.AMETHYST_BLOCK)
+								|| state.is(Blocks.BUDDING_AMETHYST) || n.contains("sulfur") || state.is(Blocks.BLUE_ICE)) stoneOk++;
+						}
+						if (!row.hasForest()) {
+							for (int y = layout.layerBottom(l); y <= layout.layerTop(l); y += 7) {
+								band++;
+								if (chunk.getBlockState(at.set(x, y, z)).isAir()) air++;
+							}
+							continue;
+						}
+						int surface = terrain.surfaceAt(l, x, z);
+						BlockState top = chunk.getBlockState(at.set(x, surface, z));
+						if (!terrain.isPond(l, x, z)) {
+							ground++;
+							if (UndergroundForest.isGroundBlock(top, layout) || top.is(Blocks.POWDER_SNOW) || top.is(Blocks.SCULK) || top.is(Blocks.MUD)) groundOk++;
+						}
+						for (int y = ff + 6; y <= ff + 30; y += 6) {
+							band++;
+							BlockState state = chunk.getBlockState(at.set(x, y, z));
+							if (!state.isSolid() || state.is(Blocks.LIGHT)) air++;
+						}
+						biome++;
+						if (row.forestBiome() != null && this.level.getBiome(at.set(x, ff + 4, z)).is(row.forestBiome())) biomeOk++;
+					}
+				}
+			}
+			String theme = row.theme() == null ? "?" : row.theme().englishName;
+			if (stone + band == 0) {
+				this.skip("layer " + l, theme + ": no loaded columns");
+				return;
+			}
+			boolean ok;
+			String detail;
+			if (!row.hasForest()) {
+				ok = stoneOk >= stone * 0.9 && air <= band * 0.35;
+				detail = String.format("%s (solid): stone %d/%d, open %d/%d", theme, stoneOk, stone, air, band);
+			} else {
+				ok = stoneOk >= stone * 0.85 && groundOk >= ground * 0.6 && air >= band * 0.5 && biomeOk >= biome * 0.95;
+				detail = String.format("%s: stone %d/%d, ground %d/%d, forest air %d/%d, biome %s %d/%d", theme, stoneOk, stone, groundOk, ground, air, band,
+					row.forestBiome() == null ? "-" : row.forestBiome().identifier(), biomeOk, biome);
+			}
+			this.report("layer " + l, ok, detail);
+		}
+
+		/** Every extra deep start of the layout exists in its chunk, once, at its deep height. */
+		private void checkDeepStarts(StripLayout layout) {
+			if (!(this.level.getChunkSource().getGenerator() instanceof StripChunkGenerator generator)) return;
+			var structures = this.level.registryAccess().lookupOrThrow(net.minecraft.core.registries.Registries.STRUCTURE);
+			List<String> bad = new ArrayList<>(), good = new ArrayList<>();
+			java.util.Map<net.minecraft.resources.ResourceKey<net.minecraft.world.level.levelgen.structure.Structure>, ChunkPos> expected = new java.util.LinkedHashMap<>();
+			java.util.Map<net.minecraft.resources.ResourceKey<net.minecraft.world.level.levelgen.structure.Structure>, Integer> layers = new java.util.HashMap<>();
+			for (DeepStarts.Planned plan : DeepStarts.plan(this.seed, this.bounds, layout, DeepTerrain.forSeed(this.seed, this.bounds, layout),
+				this.level.getServer().getStructureTemplateManager(), this.level.registryAccess(), vaultExitZ(this.level, layout))) {
+				expected.put(plan.key(), plan.chunk());
+				layers.put(plan.key(), plan.layer());
+			}
+			Object[][] projected = {{"deep_trail_ruins", DeepStarts.TRAIL_RUINS, 8600L}, {"deep_abandoned_camp_dappled", DeepStarts.CAMP_DAPPLED, 8700L},
+				{"deep_abandoned_camp_pale", DeepStarts.CAMP_PALE, 8800L}, {"deep_pillager_outpost", DeepStarts.OUTPOST, 8900L}};
+			for (int l = 1; l <= layout.deepLayers; l++) {
+				for (Object[] p : projected) {
+					if (!layout.layer(l).extraStructures().contains((String) p[0])) continue;
+					@SuppressWarnings("unchecked")
+					var key = (net.minecraft.resources.ResourceKey<net.minecraft.world.level.levelgen.structure.Structure>) p[1];
+					expected.put(key, DeepStarts.projectedChunk(this.seed, this.bounds, layout, l, (Long) p[2]));
+					layers.put(key, l);
+				}
+				if (layout.layer(l).mineshaft() != LayerSpec.Mineshaft.NONE) {
+					expected.put(DeepStarts.mineshaft(l), DeepStarts.mineshaftChunk(this.seed, this.bounds, l));
+					layers.put(DeepStarts.mineshaft(l), l);
+				}
+			}
+			expected.put(VaultPlan.KEY, generator.vaultChunk(this.seed));
+			layers.put(VaultPlan.KEY, layout.vaultLayer);
+			for (var e : expected.entrySet()) {
+				var structure = structures.getValue(e.getKey());
+				String path = e.getKey().identifier().getPath();
+				if (structure == null) {
+					bad.add(path + " missing from the registry");
+					continue;
+				}
+				// the start chunk (and every other strip chunk loaded) must hold it exactly once
+				int count = 0;
+				StructureStart found = null;
+				for (LevelChunk chunk : this.stripChunks()) {
+					StructureStart start = chunk.getStartForStructure(structure);
+					if (start != null && start.isValid()) {
+						count++;
+						found = start;
+					}
+				}
+				if (this.chunk(e.getValue().x(), e.getValue().z()) == null) {
+					good.add(path + " (chunk not loaded)");
+					continue;
+				}
+				if (count != 1 || found == null || !found.getChunkPos().equals(e.getValue())) {
+					bad.add(path + " x" + count);
+					continue;
+				}
+				int layer = layers.get(e.getKey());
+				int minY = Integer.MAX_VALUE, maxY = Integer.MIN_VALUE;
+				for (var piece : found.getPieces()) {
+					minY = Math.min(minY, piece.getBoundingBox().minY());
+					maxY = Math.max(maxY, piece.getBoundingBox().maxY());
+				}
+				if (layout.layerAt(minY) != layer || layout.layerAt(maxY) != layer) bad.add(path + " at y " + minY + ".." + maxY + " (not in layer " + layer + ")");
+				else good.add(path + " y " + minY + ".." + maxY);
+			}
+			this.report("deep starts", bad.isEmpty(), expected.size() + " expected; " + (bad.isEmpty() ? "" : "bad " + bad + "; ") + "ok " + good);
+		}
+
+		private static @Nullable Integer vaultExitZ(ServerLevel level, StripLayout layout) {
+			if (layout.vaultLayer < 1) return null;
+			VaultPlan plan = VaultPlan.get(level);
+			return plan == null ? null : plan.ez;
+		}
+
+		/** The Trial Vault: its plan, the two holes cut where the plan says, the entrance well and the exit well with its nook. */
+		private void checkVault(StripLayout layout) {
+			VaultPlan plan = VaultPlan.get(this.level);
+			if (plan == null) {
+				this.report("trial vault", false, "no vault start");
+				return;
+			}
+			int k6 = layout.vaultLayer - 1, k7 = layout.vaultLayer;
+			BlockState in = this.block(plan.nx, layout.floorTop(k6), plan.nz), out = this.block(plan.ex, layout.floorTop(k7), plan.ez);
+			BlockState well = this.block(plan.nx, layout.floorBase(k6) - 4, plan.nz);
+			if (in == null || out == null) {
+				this.skip("trial vault", plan + " (hole chunks not loaded)");
+				return;
+			}
+			boolean ok = plan.entranceValid && in.is(Blocks.LADDER) && out.is(Blocks.LADDER) && (well == null || well.is(Blocks.SCAFFOLDING));
+			boolean overStart = plan.nx >= plan.startBox.minX() && plan.nx <= plan.startBox.maxX() && plan.nz >= plan.startBox.minZ() && plan.nz <= plan.startBox.maxZ();
+			boolean inRoom = plan.ex >= plan.exitRoom.minX() && plan.ex <= plan.exitRoom.maxX() && plan.ez >= plan.exitRoom.minZ() && plan.ez <= plan.exitRoom.maxZ();
+			String exit = this.exitWell(layout, plan);
+			this.report("trial vault", ok && overStart && inRoom && exit.startsWith("ok"), plan + "; floor " + k6 + " hole " + name(in) + ", floor " + k7 + " hole " + name(out)
+				+ ", entrance well top " + name(well) + ", exit well " + exit + (plan.fallback ? " (FALLBACK exit)" : ""));
+		}
+
+		/**
+		 * The exit well: a scaffolding column next to the floor-7 hole standing on the floor-7 bedrock
+		 * and reaching up to free space in the room, and the nook (two free blocks) over the hole.
+		 */
+		private String exitWell(StripLayout layout, VaultPlan plan) {
+			int bottom = layout.layerBottom(layout.vaultLayer);
+			BlockState n0 = this.block(plan.ex, bottom, plan.ez), n1 = this.block(plan.ex, bottom + 1, plan.ez);
+			if (n0 == null || n1 == null) return "ok? (not loaded)";
+			if (!n0.isAir() || !n1.isAir()) return "BAD nook " + name(n0) + "/" + name(n1);
+			int[][] offsets = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+			for (int[] o : offsets) {
+				int x = plan.ex + o[0], z = plan.ez + o[1];
+				BlockState foot = this.block(x, bottom, z), under = this.block(x, bottom - 1, z);
+				if (foot == null || !foot.is(Blocks.SCAFFOLDING) || under == null || !under.is(Blocks.BEDROCK)) continue;
+				int y = bottom;
+				while (y < plan.exitRoom.maxY()) {
+					BlockState s = this.block(x, y + 1, z);
+					if (s == null || !s.is(Blocks.SCAFFOLDING)) break;
+					y++;
+				}
+				BlockState a1 = this.block(x, y + 1, z), a2 = this.block(x, y + 2, z);
+				boolean open = a1 != null && a2 != null && a1.getCollisionShape(this.level, new BlockPos(x, y + 1, z)).isEmpty()
+					&& a2.getCollisionShape(this.level, new BlockPos(x, y + 2, z)).isEmpty();
+				return (open ? "ok" : "BAD (blocked top)") + " at (" + x + " " + z + ") " + bottom + ".." + y + " (" + (y - bottom + 1) + " long)";
+			}
+			return "BAD (no scaffolding column on bedrock next to the hole)";
+		}
+
+		/** Every village start in the loaded strip chunks has a farm piece. */
+		private void checkVillages(StripLayout layout, List<LevelChunk> strip) {
+			int villages = 0;
+			List<String> noFarm = new ArrayList<>();
+			for (LevelChunk chunk : strip) {
+				for (StructureStart start : chunk.getAllStarts().values()) {
+					if (!VillageFarms.isVillage(start)) continue;
+					villages++;
+					if (!VillageFarms.hasFarm(start)) noFarm.add(start.getChunkPos() + " y " + start.getBoundingBox().minY());
+				}
+			}
+			if (villages == 0) {
+				this.skip("village farms", "no village start loaded");
+				return;
+			}
+			this.report("village farms", noFarm.isEmpty(), villages + " villages, without a farm: " + noFarm);
+		}
+
 		// ------------------------------------------------------------------ floors and seals
 
+		/** Hole of floor k (the Trial Vault's two floors from its plan), or null if the plan is not available. */
+		private int @Nullable [] hole(StripLayout layout, int k) {
+			if (layout.vaultLayer >= 1 && (k == layout.vaultLayer - 1 || k == layout.vaultLayer)) {
+				VaultPlan plan = VaultPlan.get(this.level);
+				return plan == null ? null : new int[] {plan.holeX(layout, k), plan.holeZ(layout, k)};
+			}
+			return new int[] {layout.holeX(this.seed, k, this.bounds), layout.holeZ(this.seed, k, this.bounds)};
+		}
+
 		private void checkFloor(StripLayout layout, int k) {
-			int hx = layout.holeX(this.seed, k, this.bounds), hz = layout.holeZ(this.seed, k, this.bounds);
+			int[] h = this.hole(layout, k);
+			if (h == null) {
+				this.skip("floor " + k, "no trial vault plan");
+				return;
+			}
+			int hx = h[0], hz = h[1];
 			int base = layout.floorBase(k), top = layout.floorTop(k);
 			Problems bad = new Problems();
 			int columns = 0;
@@ -223,7 +459,12 @@ public final class SelfCheck {
 
 		private void checkSeal(StripLayout layout, int k) {
 			String name = "seal " + k;
-			int hx = layout.holeX(this.seed, k, this.bounds), hz = layout.holeZ(this.seed, k, this.bounds), top = layout.floorTop(k);
+			int[] h = this.hole(layout, k);
+			if (h == null) {
+				this.skip(name, "no trial vault plan");
+				return;
+			}
+			int hx = h[0], hz = h[1], top = layout.floorTop(k);
 			BlockState state = this.block(hx, top, hz);
 			if (state == null) {
 				this.skip(name, "hole chunk not loaded");
@@ -232,9 +473,11 @@ public final class SelfCheck {
 			AntCraftConfig config = AntCraftConfig.get();
 			Block seal = k == layout.sealedFloor ? ModContent.NETHER_SEAL
 				: k == layout.ancientSealedFloor ? ModContent.ANCIENT_SEAL
+				: k == layout.emberSealedFloor ? ModContent.EMBER_SEAL
 				: layout.isGuardianFloor(k) ? ModContent.GUARDIAN_SEAL : null;
 			boolean gateOn = k == layout.sealedFloor ? config.netherKeyGate
 				: k == layout.ancientSealedFloor ? config.ancientKeyGate
+				: k == layout.emberSealedFloor ? config.emberKeyGate
 				: layout.isGuardianFloor(k) && config.guardians;
 			String where = "(" + hx + " " + top + " " + hz + ") " + name(state);
 			if (seal == null) {

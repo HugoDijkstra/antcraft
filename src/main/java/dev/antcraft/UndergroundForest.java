@@ -61,6 +61,11 @@ public final class UndergroundForest {
 			|| state.is(Blocks.SNOW_BLOCK) || state.is(Blocks.COARSE_DIRT) || state.is(Blocks.STONE));
 	}
 
+	/** Public view of the forest ground test (for {@link SelfCheck}). */
+	public static boolean isGroundBlock(BlockState state, StripLayout layout) {
+		return isGround(state, layout);
+	}
+
 	/** Finds the forest floor in a column: the ground block with air (or a plant) on top, or null. */
 	private static BlockPos findGround(WorldGenLevel level, DeepTerrain terrain, int layer, int x, int z) {
 		int surface = terrain.surfaceAt(layer, x, z);
@@ -71,7 +76,8 @@ public final class UndergroundForest {
 		return pos.immutable();
 	}
 
-	public static void placeTrees(WorldGenLevel level, ChunkGenerator generator, ChunkAccess chunk, DeepTerrain terrain, List<BoundingBox> deepPieces) {
+	public static void placeTrees(WorldGenLevel level, ChunkGenerator generator, ChunkAccess chunk, DeepTerrain terrain, List<BoundingBox> deepPieces,
+		@org.jspecify.annotations.Nullable VaultPlan vault) {
 		ChunkPos pos = chunk.getPos();
 		StripBounds bounds = terrain.bounds();
 		StripLayout layout = terrain.layout();
@@ -98,7 +104,7 @@ public final class UndergroundForest {
 				ResourceKey<Feature> key = pick(choices, random);
 				if (inVillage(layout, deepPieces, layer, x, z)) continue;
 				// keep the fall line from the hole above clear, so digging down lands in the pool
-				if (terrain.nearHoleAbove(layer, x, z, 4)) continue;
+				if (terrain.nearHoleAbove(layer, x, z, 4, vault)) continue;
 				BlockPos ground = findGround(level, terrain, layer, x, z);
 				if (ground == null) continue;
 				// under the sea (no islands yet); tall layouts only, so layout 1 keeps its original placement
@@ -132,6 +138,81 @@ public final class UndergroundForest {
 
 	private static final List<EntityType<? extends Mob>> ANIMALS = List.of(EntityTypes.COW, EntityTypes.SHEEP, EntityTypes.PIG, EntityTypes.CHICKEN);
 
+	/** The tall layout's land animals per theme row (layout 1 only uses FARM, DESERT and MOOSHROOM). */
+	private static List<EntityType<? extends Mob>> landAnimals(LayerSpec.Animals animals) {
+		return switch (animals) {
+			case TAIGA -> List.of(EntityTypes.WOLF, EntityTypes.FOX, EntityTypes.RABBIT);
+			case AUTUMN -> List.of(EntityTypes.CHICKEN);
+			case BADLANDS -> List.of(EntityTypes.ARMADILLO, EntityTypes.RABBIT);
+			case DARKWOOD -> List.of(EntityTypes.PIG, EntityTypes.RABBIT);
+			case JUNGLE -> List.of(EntityTypes.PARROT, EntityTypes.OCELOT, EntityTypes.PANDA);
+			case SAVANNA -> List.of(EntityTypes.HORSE, EntityTypes.DONKEY);
+			case CRAGS -> List.of(EntityTypes.GOAT, EntityTypes.LLAMA);
+			case CRYSTAL -> List.of(EntityTypes.BEE, EntityTypes.RABBIT);
+			case SWAMP -> List.of(EntityTypes.FROG);
+			case FROZEN -> List.of(EntityTypes.POLAR_BEAR, EntityTypes.RABBIT);
+			default -> List.of();
+		};
+	}
+
+	/** Water animals per theme row: in the ponds (lush) or the sea (reef). */
+	private static List<EntityType<? extends Mob>> waterAnimals(LayerSpec.Animals animals) {
+		return switch (animals) {
+			case LUSH -> List.of(EntityTypes.AXOLOTL, EntityTypes.GLOW_SQUID);
+			case REEF -> List.of(EntityTypes.TROPICAL_FISH, EntityTypes.NAUTILUS, EntityTypes.GLOW_SQUID);
+			default -> List.of();
+		};
+	}
+
+	/** Chunk of the Autumn Hollow's two sniffers. */
+	static ChunkPos snifferChunk(DeepTerrain terrain, int layer) {
+		return DeepStarts.projectedChunk(terrain.seed(), terrain.bounds(), terrain.layout(), layer, 9700);
+	}
+
+	private static void spawn(WorldGenRegion region, EntityType<? extends Mob> type, double x, double y, double z, RandomSource random) {
+		Mob mob = type.create(region.getLevel(), EntitySpawnReason.CHUNK_GENERATION);
+		if (mob == null) return;
+		mob.snapTo(x, y, z, random.nextFloat() * 360.0F, 0.0F);
+		mob.finalizeSpawn(region, region.getCurrentDifficultyAt(mob.blockPosition()), EntitySpawnReason.CHUNK_GENERATION, null);
+		mob.setPersistenceRequired();
+		region.addFreshEntityWithPassengers(mob);
+	}
+
+	/** Tall layouts: the theme's animals (land, water, the two sniffers). */
+	private static void spawnThemed(WorldGenRegion region, DeepTerrain terrain, int layer, LayerSpec spec, RandomSource random, int minX, int maxX, int minZ, int maxZ) {
+		List<EntityType<? extends Mob>> water = waterAnimals(spec.animals());
+		if (!water.isEmpty()) {
+			EntityType<? extends Mob> type = water.get(random.nextInt(water.size()));
+			int count = 1 + random.nextInt(3);
+			for (int i = 0; i < count; i++) {
+				int x = minX + random.nextInt(maxX - minX + 1), z = minZ + random.nextInt(maxZ - minZ + 1);
+				int surface = terrain.surfaceAt(layer, x, z);
+				BlockPos pos = spec.theme().isWater() ? new BlockPos(x, surface + 2, z) : new BlockPos(x, surface, z);
+				if (!region.getFluidState(pos).is(net.minecraft.tags.FluidTags.WATER)) continue;
+				spawn(region, type, x + 0.5, pos.getY(), z + 0.5, random);
+			}
+			return;
+		}
+		List<EntityType<? extends Mob>> land = landAnimals(spec.animals());
+		if (spec.animals() == LayerSpec.Animals.AUTUMN && region.getCenter().equals(snifferChunk(terrain, layer))) {
+			land = List.of(EntityTypes.SNIFFER);
+		}
+		if (land.isEmpty()) return;
+		EntityType<? extends Mob> type = land.get(random.nextInt(land.size()));
+		boolean sniffers = type == EntityTypes.SNIFFER;
+		int count = sniffers ? 2 : type == EntityTypes.HORSE || type == EntityTypes.DONKEY || type == EntityTypes.POLAR_BEAR || type == EntityTypes.PANDA ? 1 + random.nextInt(2) : 2 + random.nextInt(3);
+		for (int i = 0, tries = 0; i < count && tries < 24; tries++) {
+			int x = minX + random.nextInt(maxX - minX + 1), z = minZ + random.nextInt(maxZ - minZ + 1);
+			BlockPos ground = findGround(region, terrain, layer, x, z);
+			if (ground == null || !region.getFluidState(ground.above()).isEmpty() || !hasHeadroom(region, ground, sniffers || type == EntityTypes.HORSE || type == EntityTypes.LLAMA ? 3 : 2)) {
+				if (!sniffers) i++;
+				continue;
+			}
+			spawn(region, type, x + 0.5, ground.getY() + 1, z + 0.5, random);
+			i++;
+		}
+	}
+
 	/** Air (no fluid, no mushroom cap) for {@code height} blocks above the ground, so the mob can't suffocate. */
 	private static boolean hasHeadroom(WorldGenLevel level, BlockPos ground, int height) {
 		for (int dy = 1; dy <= height; dy++) {
@@ -153,12 +234,17 @@ public final class UndergroundForest {
 
 		for (int layer = 1; layer <= layout.deepLayers; layer++) {
 			if (!layout.layer(layer).hasForest()) continue;
-			if (random.nextFloat() > 0.6F) continue;
+			boolean sniffers = layout.layer(layer).animals() == LayerSpec.Animals.AUTUMN && pos.equals(snifferChunk(terrain, layer));
+			if (random.nextFloat() > 0.6F && !sniffers) continue;
 			EntityType<? extends Mob> type = switch (layout.layer(layer).animals()) {
 				case MOOSHROOM -> EntityTypes.MOOSHROOM;
 				case DESERT -> random.nextFloat() < 0.2F ? EntityTypes.CAMEL : EntityTypes.RABBIT;
 				case FARM -> ANIMALS.get(random.nextInt(ANIMALS.size()));
 				case NONE -> null;
+				default -> {
+					spawnThemed(region, terrain, layer, layout.layer(layer), random, minX, maxX, minZ, maxZ);
+					yield null;
+				}
 			};
 			if (type == null) continue;
 			int count = type == EntityTypes.CAMEL ? 1 : 2 + random.nextInt(3);

@@ -148,9 +148,15 @@ final class LayerTables {
 		return List.copyOf(all);
 	}
 
-	/** Dungeon attempts per 256 strip columns: rare near the top, common deep down (section 3.9). */
+	/**
+	 * Monster rooms per default 20x300 strip (scaled by area for other sizes): rare near the top,
+	 * common deep down (section 3.9; 2 in layer 1, 7 in layer 10, 12 in layer 19). Phase 3b
+	 * tuning: the spec's attempts per 256 columns (0.4 + 2.6 (L-1)/18) left the counts to how
+	 * often a random spot fits a room, which swung from 0 to 15 per layer; the rooms are now
+	 * planned per strip and searched for in their chunk.
+	 */
 	static double dungeonRate2(int layer) {
-		return 0.4 + 2.6 * (layer - 1) / 18.0;
+		return 2.0 + 10.0 * (layer - 1) / 18.0;
 	}
 
 	private static final List<String> NO_EXTRAS = List.of();
@@ -191,45 +197,45 @@ final class LayerTables {
 			row2(l, 1, LayerTheme.OAK_HOLLOW, deepslate, tuff, 0.4, Biomes.FOREST, caves, 0.5, clay, glowstone, wl,
 				trees(TreeFeatures.OAK, 5, TreeFeatures.BIRCH, 3, TreeFeatures.FANCY_OAK, 2), 9, PlantPalette.MEADOW, GroundPalette.GRASS, Animals.FARM, normal, NO_EXTRAS),
 			row2(l, 2, LayerTheme.TAIGA_DEEP, s(Blocks.ANDESITE), s(Blocks.MOSSY_COBBLESTONE), 0.45, Biomes.TAIGA, caves, 0.5, clay, glowstone, wl,
-				trees(TreeFeatures.SPRUCE, 6, TreeFeatures.PINE, 3, TreeFeatures.MEGA_SPRUCE, 1), 9, PlantPalette.TAIGA, GroundPalette.PODZOL_MIX, Animals.FARM, normal,
+				trees(TreeFeatures.SPRUCE, 6, TreeFeatures.PINE, 3, TreeFeatures.MEGA_SPRUCE, 1), 9, PlantPalette.TAIGA, GroundPalette.PODZOL_MIX, Animals.TAIGA, normal,
 				List.of("deep_trail_ruins")),
 			row2(l, 3, LayerTheme.AUTUMN_HOLLOW, s(Blocks.GRANITE), tuff, 0.4, Biomes.DAPPLED_FOREST, caves, 0.5, clay, glowstone, wl,
 				trees(TreeFeatures.ORANGE_POPLAR_LEAF_LITTER, 5, TreeFeatures.RED_POPLAR_LEAF_LITTER, 4, TreeFeatures.YELLOW_POPLAR_LEAF_LITTER, 2,
-					TreeFeatures.FALLEN_POPLAR_TREE, 2, TreeFeatures.SPRUCE, 1), 9, PlantPalette.AUTUMN, GroundPalette.COARSE_MIX, Animals.FARM, normal,
+					TreeFeatures.FALLEN_POPLAR_TREE, 2, TreeFeatures.SPRUCE, 1), 9, PlantPalette.AUTUMN, GroundPalette.COARSE_MIX, Animals.AUTUMN, normal,
 				List.of("deep_abandoned_camp_dappled")),
 			row2(l, 4, LayerTheme.OCHRE_BADLANDS, s(Blocks.TERRACOTTA), s(Blocks.DYED_TERRACOTTA.pick(net.minecraft.world.item.DyeColor.ORANGE)), 0.4, Biomes.BADLANDS, caves,
-				0.5, clay, glowstone, lava, trees(TreeFeatures.OAK, 1), 2, PlantPalette.BADLANDS, GroundPalette.RED_SAND, Animals.FARM, mesa, NO_EXTRAS),
+				0.5, clay, glowstone, lava, trees(TreeFeatures.OAK, 1), 2, PlantPalette.BADLANDS, GroundPalette.RED_SAND, Animals.BADLANDS, mesa, NO_EXTRAS),
 			row2(l, 5, LayerTheme.DARKWOOD, s(Blocks.SMOOTH_BASALT), s(Blocks.COBBLED_DEEPSLATE), 0.4, Biomes.DARK_FOREST, caves, 0.5, clay, glowstone, wl,
-				trees(TreeFeatures.DARK_OAK, 8, TreeFeatures.OAK, 1, TreeFeatures.HUGE_BROWN_MUSHROOM, 1), 14, PlantPalette.DARKWOOD, GroundPalette.GRASS, Animals.FARM, mesa,
+				trees(TreeFeatures.DARK_OAK, 8, TreeFeatures.OAK, 1, TreeFeatures.HUGE_BROWN_MUSHROOM, 1), 14, PlantPalette.DARKWOOD, GroundPalette.GRASS, Animals.DARKWOOD, mesa,
 				List.of("deep_pillager_outpost")),
 			row2(l, 6, LayerTheme.LUSH_GROTTO, deepslate, s(Blocks.MOSS_BLOCK), 0.4, Biomes.LUSH_CAVES, Biomes.LUSH_CAVES, 0.5, clay, glowstone, wl,
-				trees(TreeFeatures.AZALEA_TREE, 6), 9, PlantPalette.LUSH, GroundPalette.MOSS, Animals.FARM, normal, NO_EXTRAS),
+				trees(TreeFeatures.AZALEA_TREE, 6), 9, PlantPalette.LUSH, GroundPalette.MOSS, Animals.LUSH, normal, NO_EXTRAS),
 			row2(l, 7, LayerTheme.TRIAL_VAULT, tuff, deepslate, 0.45, caves, caves, 0.5, clay, glowstone, wl,
 				List.of(), 0, PlantPalette.NONE, GroundPalette.GRASS, Animals.NONE, none, List.of("deep_trial_vault")),
 			row2(l, 8, LayerTheme.JUNGLE, s(Blocks.DRIPSTONE_BLOCK), calcite, 0.4, Biomes.JUNGLE, caves, 0.5, clay, glowstone, wl,
-				trees(TreeFeatures.JUNGLE_TREE, 6, TreeFeatures.MEGA_JUNGLE_TREE, 2, TreeFeatures.JUNGLE_BUSH, 2), 14, PlantPalette.JUNGLE, GroundPalette.GRASS, Animals.FARM,
+				trees(TreeFeatures.JUNGLE_TREE, 6, TreeFeatures.MEGA_JUNGLE_TREE, 2, TreeFeatures.JUNGLE_BUSH, 2), 14, PlantPalette.JUNGLE, GroundPalette.GRASS, Animals.JUNGLE,
 				normal, List.of("deep_jungle_temple")),
 			row2(l, 9, LayerTheme.SULFUR_SPRINGS, s(Blocks.SULFUR), s(Blocks.CINNABAR), 0.4, Biomes.SAVANNA, Biomes.SULFUR_CAVES, 0.5, clay, glowstone, wl,
-				trees(TreeFeatures.ACACIA, 6, TreeFeatures.OAK, 1), 9, PlantPalette.SAVANNA, GroundPalette.COARSE_MIX, Animals.FARM, normal, NO_EXTRAS),
+				trees(TreeFeatures.ACACIA, 6, TreeFeatures.OAK, 1), 9, PlantPalette.SAVANNA, GroundPalette.COARSE_MIX, Animals.SAVANNA, normal, NO_EXTRAS),
 			row2(l, 10, LayerTheme.PALE_HOLLOW, s(Blocks.DIORITE), s(Blocks.PALE_MOSS_BLOCK), 0.4, Biomes.PALE_GARDEN, caves, 0.5, clay, s(Blocks.PEARLESCENT_FROGLIGHT), lava,
 				trees(TreeFeatures.PALE_OAK, 6, TreeFeatures.PALE_OAK_CREAKING, 1), 9, PlantPalette.PALE, GroundPalette.PALE_MOSS, Animals.NONE, normal,
 				List.of("deep_abandoned_camp_pale")),
 			row2(l, 11, LayerTheme.STONY_CRAGS, s(Blocks.STONE), calcite, 0.4, Biomes.STONY_PEAKS, caves, 0.5, clay, glowstone, wl,
-				trees(TreeFeatures.AZALEA_TREE, 1), 2, PlantPalette.CRAGS, GroundPalette.STONE_MIX, Animals.FARM, normal, List.of("deep_ruined_portal_crags")),
+				trees(TreeFeatures.AZALEA_TREE, 1), 2, PlantPalette.CRAGS, GroundPalette.STONE_MIX, Animals.CRAGS, normal, List.of("deep_ruined_portal_crags")),
 			row2(l, 12, LayerTheme.DEEP_DARK, deepslate, s(Blocks.SCULK), 0.4, Biomes.DEEP_DARK, Biomes.DEEP_DARK, 0.5, clay, s(Blocks.VERDANT_FROGLIGHT), lava,
 				List.of(), 0, PlantPalette.NONE, GroundPalette.SCULK, Animals.NONE, none, List.of("deep_ancient_city")),
 			row2(l, 13, LayerTheme.CRYSTAL_HOLLOWS, calcite, s(Blocks.AMETHYST_BLOCK), 0.6, Biomes.CHERRY_GROVE, caves, 0.5, clay, glowstone, wl,
-				trees(TreeFeatures.CHERRY_BEES_005, 1), 9, PlantPalette.CHERRY, GroundPalette.GRASS, Animals.FARM, normal, NO_EXTRAS),
+				trees(TreeFeatures.CHERRY_BEES_005, 1), 9, PlantPalette.CHERRY, GroundPalette.GRASS, Animals.CRYSTAL, normal, NO_EXTRAS),
 			row2(l, 14, LayerTheme.BURIED_DESERT, s(Blocks.SANDSTONE), s(Blocks.RED_SANDSTONE), 0.4, Biomes.DESERT, caves, 0.66, sand, glowstone, lava,
 				List.of(), 0, PlantPalette.DESERT, GroundPalette.SAND, Animals.DESERT, normal, List.of("deep_desert_pyramid")),
 			row2(l, 15, LayerTheme.SUNKEN_REEF, s(Blocks.PRISMARINE), s(Blocks.DARK_PRISMARINE), 0.4, Biomes.WARM_OCEAN, caves, 0.5, sand, s(Blocks.SEA_LANTERN), wl,
-				trees(TreeFeatures.JUNGLE_BUSH, 1), 1, PlantPalette.NONE, GroundPalette.SAND, Animals.NONE, normal,
+				trees(TreeFeatures.JUNGLE_BUSH, 1), 1, PlantPalette.NONE, GroundPalette.SAND, Animals.REEF, normal,
 				List.of("deep_ocean_ruin_0", "deep_ocean_ruin_1", "deep_ocean_ruin_2")),
 			row2(l, 16, LayerTheme.MANGROVE, s(Blocks.PACKED_MUD), s(Blocks.MUD), 0.55, Biomes.MANGROVE_SWAMP, caves, 0.25, clay, s(Blocks.OCHRE_FROGLIGHT), wl,
-				trees(TreeFeatures.MANGROVE, 3, TreeFeatures.TALL_MANGROVE, 1), 9, PlantPalette.SWAMP, GroundPalette.MUD_AND_GRASS, Animals.FARM, normal,
+				trees(TreeFeatures.MANGROVE, 3, TreeFeatures.TALL_MANGROVE, 1), 9, PlantPalette.SWAMP, GroundPalette.MUD_AND_GRASS, Animals.SWAMP, normal,
 				List.of("deep_swamp_hut")),
 			row2(l, 17, LayerTheme.FROZEN_DEPTHS, deepslate, s(Blocks.PACKED_ICE), 0.4, Biomes.ICE_SPIKES, caves, 0.5, clay, glowstone, wl,
-				trees(TreeFeatures.PINE, 1), 3, PlantPalette.NONE, GroundPalette.SNOW, Animals.FARM, normal, List.of("deep_igloo")),
+				trees(TreeFeatures.PINE, 1), 3, PlantPalette.NONE, GroundPalette.SNOW, Animals.FROZEN, normal, List.of("deep_igloo")),
 			row2(l, 18, LayerTheme.EMBER_RIFT, s(Blocks.BLACKSTONE), s(Blocks.MAGMA_BLOCK), 0.62, EMBER_RIFT, caves, 0.5, clay, shroomlight, lava,
 				trees(TreeFeatures.WARPED_FUNGUS_PLANTED, 5), 9, PlantPalette.EMBER, GroundPalette.WARPED_NYLIUM, Animals.NONE, mesa, NO_EXTRAS),
 			row2(l, 19, LayerTheme.MUSHROOM, deepslate, s(Blocks.BLACKSTONE), 0.4, Biomes.MUSHROOM_FIELDS, caves, 0.5, clay, shroomlight, lava,

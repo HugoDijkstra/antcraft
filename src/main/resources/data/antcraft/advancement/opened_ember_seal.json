@@ -1,0 +1,27 @@
+{
+  "parent": "antcraft:layer_7",
+  "display": {
+    "icon": {
+      "id": "antcraft:ember_key"
+    },
+    "title": {
+      "translate": "advancements.antcraft.opened_ember_seal.title",
+      "fallback": "Ember Lock"
+    },
+    "description": {
+      "translate": "advancements.antcraft.opened_ember_seal.description",
+      "fallback": "Open the Ember Seal on floor 16 with an Ember Key"
+    },
+    "frame": "goal"
+  },
+  "criteria": {
+    "opened": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "opened"
+    ]
+  ]
+}

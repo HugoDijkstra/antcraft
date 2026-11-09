@@ -1,0 +1,27 @@
+{
+  "parent": "antcraft:layer_stony_crags",
+  "display": {
+    "icon": {
+      "id": "minecraft:breeze_rod"
+    },
+    "title": {
+      "translate": "advancements.antcraft.guardian_gale_lord.title",
+      "fallback": "Calm Winds"
+    },
+    "description": {
+      "translate": "advancements.antcraft.guardian_gale_lord.description",
+      "fallback": "Defeat the Gale Lord guarding floor 11"
+    },
+    "frame": "challenge"
+  },
+  "criteria": {
+    "defeated": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "defeated"
+    ]
+  ]
+}

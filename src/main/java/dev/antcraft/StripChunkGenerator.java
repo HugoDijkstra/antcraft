@@ -220,6 +220,7 @@ public final class StripChunkGenerator extends ChunkGenerator implements Wrapped
 			return CompletableFuture.completedFuture(chunk); // pure void
 		}
 		List<BoundingBox> cityPieces = this.findDeepPieces(structureManager, pos);
+		VaultPlan vault = this.layout.vaultLayer >= 1 && this.bounds.chunkOverlaps(pos) ? VaultPlan.find(structureManager, pos, this.bounds) : null;
 		if (this.framed() && this.bounds.chunkOverlaps(pos)) {
 			// the vanilla terrain runs in its own coordinates on a frame over the real sections
 			FrameTerrain.FrameProtoChunk frame = FrameTerrain.frame(
@@ -228,7 +229,7 @@ public final class StripChunkGenerator extends ChunkGenerator implements Wrapped
 			BiomeManager shifted = new FrameTerrain.ShiftedBiomeManager(biomeManager, this.frameOffset());
 			return this.base.buildTerrain(frame, Blender.empty(), randomState, structureManager, shifted, carverBiomeRegion, possibleBiomes).thenApply(f -> {
 				FrameTerrain.transfer(frame, chunk);
-				this.shapeChunk(chunk, this.terrain(randomState.seed()), cityPieces, randomState);
+				this.shapeChunk(chunk, this.terrain(randomState.seed()), cityPieces, vault, randomState);
 				return chunk;
 			});
 		}
@@ -236,7 +237,7 @@ public final class StripChunkGenerator extends ChunkGenerator implements Wrapped
 			? this.base.buildTerrain(chunk, blender, randomState, structureManager, biomeManager, carverBiomeRegion, possibleBiomes)
 			: CompletableFuture.completedFuture(chunk);
 		return vanilla.thenApply(c -> {
-			this.shapeChunk(c, this.terrain(randomState.seed()), cityPieces, randomState);
+			this.shapeChunk(c, this.terrain(randomState.seed()), cityPieces, vault, randomState);
 			return c;
 		});
 	}
@@ -257,21 +258,75 @@ public final class StripChunkGenerator extends ChunkGenerator implements Wrapped
 		return id != null && id.getNamespace().equals(AntCraft.MOD_ID) && id.getPath().startsWith("deep_");
 	}
 
-	/** Boxes of deep structure pieces (ancient city, deep villages) that come near this chunk. */
+	/**
+	 * Boxes of deep structure pieces (ancient city, deep villages, ...) that come near this chunk,
+	 * the ones the terrain flattens or carves around. Tall layouts tag them ({@link DeepBox}) and
+	 * leave out the mineshafts and the Trial Vault (they carve their own space).
+	 */
 	private List<BoundingBox> findDeepPieces(StructureManager structureManager, ChunkPos pos) {
+		return this.findDeepPieces(structureManager, pos, false, 4);
+	}
+
+	private List<BoundingBox> findDeepPieces(StructureManager structureManager, ChunkPos pos, boolean all, int margin) {
+		return this.findDeepPieces(structureManager, pos, all, margin, structureManager.startsForStructure(pos.x(), pos.z(), s -> true));
+	}
+
+	/**
+	 * Deep pieces near a chunk from the starts referenced by it and its 8 neighbours: a piece just
+	 * across the chunk border belongs to a start the chunk itself may not reference.
+	 */
+	private List<BoundingBox> findDeepPiecesAround(WorldGenLevel level, StructureManager structureManager, ChunkPos pos, int margin) {
+		java.util.Set<StructureStart> starts = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+		starts.addAll(structureManager.startsForStructure(pos.x(), pos.z(), s -> true));
+		for (int dx = -1; dx <= 1; dx++) {
+			for (int dz = -1; dz <= 1; dz++) {
+				if (dx == 0 && dz == 0) continue;
+				for (Map.Entry<Structure, it.unimi.dsi.fastutil.longs.LongSet> e : structureManager.getAllStructuresAt(new BlockPos(pos.getMinBlockX() + dx * 16, 0, pos.getMinBlockZ() + dz * 16)).entrySet()) {
+					for (long key : e.getValue()) {
+						ChunkPos at = ChunkPos.unpack(key);
+						// the region holds structure starts out to 8 chunks (as for the chunk's own references)
+						if (pos.getChessboardDistance(at.x(), at.z()) > 8) continue;
+						StructureStart start = structureManager.getStartForStructure(e.getKey(), level.getChunk(at.x(), at.z(), net.minecraft.world.level.chunk.status.ChunkStatus.STRUCTURE_STARTS));
+						if (start != null && start.isValid()) starts.add(start);
+					}
+				}
+			}
+		}
+		return this.findDeepPieces(structureManager, pos, true, margin, starts);
+	}
+
+	private List<BoundingBox> findDeepPieces(StructureManager structureManager, ChunkPos pos, boolean all, int margin, java.util.Collection<StructureStart> starts) {
 		List<BoundingBox> boxes = new ArrayList<>();
-		BoundingBox chunkBox = new BoundingBox(pos.getMinBlockX() - 4, this.layout.worldMinY, pos.getMinBlockZ() - 4, pos.getMaxBlockX() + 4, this.layout.worldMaxY, pos.getMaxBlockZ() + 4);
+		BoundingBox chunkBox = new BoundingBox(pos.getMinBlockX() - margin, this.layout.worldMinY, pos.getMinBlockZ() - margin, pos.getMaxBlockX() + margin, this.layout.worldMaxY, pos.getMaxBlockZ() + margin);
 		boolean byKey = this.layout.id >= 2;
-		for (StructureStart start : structureManager.startsForStructure(pos.x(), pos.z(), s -> true)) {
+		var registry = structureManager.registryAccess().lookupOrThrow(Registries.STRUCTURE);
+		for (StructureStart start : starts) {
 			if (byKey ? !isDeepKey(structureManager.registryAccess(), start.getStructure()) : start.getBoundingBox().maxY() >= this.layout.vanillaMinY) continue;
+			if (!byKey) {
+				for (StructurePiece piece : start.getPieces()) {
+					if (piece.getBoundingBox().intersects(chunkBox)) boxes.add(piece.getBoundingBox());
+				}
+				continue;
+			}
+			Identifier id = registry.getKey(start.getStructure());
+			String path = id == null ? "" : id.getPath();
+			boolean ownSpace = path.startsWith("deep_mineshaft") || path.equals("deep_trial_vault");
+			if (ownSpace && !all) continue;
+			boolean trailRuins = path.equals("deep_trail_ruins"), igloo = path.equals("deep_igloo"), city = path.equals("deep_ancient_city");
 			for (StructurePiece piece : start.getPieces()) {
-				if (piece.getBoundingBox().intersects(chunkBox)) boxes.add(piece.getBoundingBox());
+				BoundingBox box = piece.getBoundingBox();
+				if (all && path.equals("deep_desert_pyramid")) box = new BoundingBox(box.minX(), box.minY() - DeepStarts.PYRAMID_TNT_DEPTH, box.minZ(), box.maxX(), box.maxY(), box.maxZ());
+				if (!box.intersects(chunkBox)) continue;
+				int layer = this.layout.layerAt(box.maxY());
+				boolean basement = igloo && layer >= 1 && box.maxY() < this.layout.forestFloor(layer) - 2;
+				DeepBox.Kind kind = trailRuins || basement ? DeepBox.Kind.BURIED : city ? DeepBox.Kind.CITY : DeepBox.Kind.FOREST;
+				boxes.add(new DeepBox(box, kind));
 			}
 		}
 		return boxes;
 	}
 
-	private void shapeChunk(ChunkAccess chunk, DeepTerrain terrain, List<BoundingBox> cityPieces, RandomState randomState) {
+	private void shapeChunk(ChunkAccess chunk, DeepTerrain terrain, List<BoundingBox> cityPieces, @Nullable VaultPlan vault, RandomState randomState) {
 		ChunkPos pos = chunk.getPos();
 		LevelHeightAccessor heightAccessor = chunk.getHeightAccessorForGeneration();
 		LevelChunkSection[] sections = chunk.getSections();
@@ -283,7 +338,7 @@ public final class StripChunkGenerator extends ChunkGenerator implements Wrapped
 					int z = pos.getMinBlockZ() + lz;
 					if (this.bounds.inside(x, z)) {
 						terrain.reshapeVanillaBottom(chunk, lx, lz, x, z);
-						terrain.fillColumn(chunk, lx, lz, x, z, cityPieces);
+						terrain.fillColumn(chunk, lx, lz, x, z, cityPieces, vault);
 					} else {
 						clearColumnRaw(chunk, lx, lz);
 						if (this.bounds.isWall(x, z)) {
@@ -298,7 +353,7 @@ public final class StripChunkGenerator extends ChunkGenerator implements Wrapped
 			if (this.bounds.chunkOverlaps(pos)) {
 				terrain.placeOres(chunk);
 				PortalRoom.build(chunk, terrain.seed(), this.bounds, this.layout);
-				terrain.cutHoles(chunk);
+				terrain.cutHoles(chunk, vault);
 			}
 		} finally {
 			for (LevelChunkSection section : sections) section.release();
@@ -358,9 +413,10 @@ public final class StripChunkGenerator extends ChunkGenerator implements Wrapped
 			ranges[layout.deepLayers + 1] = new int[] {layout.cityMinY(), layout.cityMaxY()};
 			return ranges;
 		}
-		// tall layouts: the vanilla band, every forest band, the city and the Trial Vault
+		// tall layouts: the vanilla band (and a little below it: vanilla sculk spreads down the outside of the
+		// walls past the first floor), every forest band, the city and the Trial Vault
 		List<int[]> ranges = new ArrayList<>();
-		ranges.add(new int[] {layout.vanillaMinY, layout.worldMaxY});
+		ranges.add(new int[] {layout.vanillaMinY - 8, layout.worldMaxY});
 		for (int layer = 1; layer <= layout.deepLayers; layer++) {
 			if (!layout.layer(layer).hasForest()) continue;
 			int floor = layout.forestFloor(layer);
@@ -368,6 +424,20 @@ public final class StripChunkGenerator extends ChunkGenerator implements Wrapped
 		}
 		ranges.add(new int[] {layout.cityMinY(), layout.cityMaxY()});
 		if (layout.vaultLayer >= 1) ranges.add(new int[] {layout.layerBottom(layout.vaultLayer), layout.layerTop(layout.vaultLayer)});
+		for (int layer = 1; layer <= layout.deepLayers; layer++) {
+			LayerSpec spec = layout.layer(layer);
+			int floor = layout.forestFloor(layer);
+			// the mineshafts' cave bands
+			if (spec.mineshaft() != LayerSpec.Mineshaft.NONE) ranges.add(DeepStarts.mineshaftBand(layout, layer));
+			// the buried trail ruins reach below the forest band, the igloo basement too
+			if (spec.extraStructures().contains("deep_trail_ruins")) ranges.add(new int[] {floor - 30, floor - 9});
+			if (spec.extraStructures().contains("deep_igloo")) ranges.add(new int[] {floor - 42, floor - 9});
+			// cave features that grow several blocks (geodes, sulfur spikes, sculk, blue ice)
+			LayerTheme theme = spec.theme();
+			if (theme == LayerTheme.CRYSTAL_HOLLOWS || theme == LayerTheme.SULFUR_SPRINGS || theme == LayerTheme.DEEP_DARK || theme == LayerTheme.FROZEN_DEPTHS) {
+				ranges.add(new int[] {layout.layerBottom(layer) + layout.hallHeight, layout.layerTop(layer)});
+			}
+		}
 		return ranges.toArray(int[][]::new);
 	}
 
@@ -426,7 +496,15 @@ public final class StripChunkGenerator extends ChunkGenerator implements Wrapped
 		DeepTerrain terrain = this.terrain(level.getSeed());
 		terrain.sealAboveFirstHall(level, pos);
 		List<BoundingBox> deepPieces = this.findDeepPieces(structureManager, pos);
-		UndergroundForest.placeTrees(level, this, chunk, terrain, deepPieces);
+		VaultPlan vault = this.layout.vaultLayer >= 1 ? VaultPlan.find(structureManager, pos, this.bounds) : null;
+		UndergroundForest.placeTrees(level, this, chunk, terrain, deepPieces, vault);
+		if (this.layout.id >= 2) {
+			// themed features before the ground plants and the light grid, which would take their spots
+			ThemeDecor.decorate(level, this, chunk, terrain, deepPieces, vault);
+			ThemeDecor.dungeons(level, this, chunk, terrain, this.findDeepPiecesAround(level, structureManager, pos, 16), vault);
+			ThemeDecor.cleanShriekers(level, terrain, pos, this.findDeepPiecesAround(level, structureManager, pos, 32), vault);
+			if (vault != null) vault.cutWells(level, pos, this.layout, this.bounds);
+		}
 		terrain.decorateForests(level, chunk, deepPieces); // plants and lights after trees, so they don't block them
 		PortalRoom.placeBlockEntities(level, chunk, level.getSeed(), this.bounds, this.layout);
 		if (pos.equals(this.layout.cityChunk(this.bounds))) this.placeCityKeyChest(level, pos, deepPieces);
@@ -507,7 +585,7 @@ public final class StripChunkGenerator extends ChunkGenerator implements Wrapped
 		if (centerChunk.getPos().equals(this.layout.cityChunk(this.bounds))) {
 			// the city JSON's absolute start height (-1280) moves to this layout's city layer
 			WorldGenShift.withOverride(this.layout.cityAnchorDelta, () -> {
-				this.startDeepStructure(DEEP_CITY, null, registryAccess, state, structureManager, centerChunk, structureTemplateManager, level);
+				this.startDeepStructure(DEEP_CITY, null, null, registryAccess, state, structureManager, centerChunk, structureTemplateManager, level);
 				return null;
 			});
 		}
@@ -515,12 +593,238 @@ public final class StripChunkGenerator extends ChunkGenerator implements Wrapped
 			ResourceKey<Structure> village = this.layout.layer(layer).villageStructure();
 			if (village != null && centerChunk.getPos().equals(this.layout.villageChunk(state.getLevelSeed(), layer, this.bounds))) {
 				int ground = this.layout.forestFloor(layer) + 1; // first free block above the flattened forest floor
-				this.startDeepStructure(village, ground, registryAccess, state, structureManager, centerChunk, structureTemplateManager, level);
+				this.startDeepStructure(village, ground, null, registryAccess, state, structureManager, centerChunk, structureTemplateManager, level);
 			}
 		}
 		if (centerChunk.getPos().equals(this.layout.pyramidChunk(state.getLevelSeed(), this.bounds))) {
 			this.startDeepPyramid(registryAccess, state.getLevelSeed(), structureManager, centerChunk);
 		}
+		if (this.layout.id >= 2) this.createTallStarts(registryAccess, state, structureManager, centerChunk, structureTemplateManager, level);
+	}
+
+	// ------------------------------------------------------------------ tall layouts: the extra deep starts
+
+	private volatile @Nullable List<DeepStarts.Planned> planned;
+
+	/** The hand-placed starts (pure function of seed and bounds), with their footprints. */
+	private List<DeepStarts.Planned> planned(long seed, StructureTemplateManager templates, RegistryAccess registryAccess, @Nullable Integer vaultExitZ) {
+		List<DeepStarts.Planned> list = this.planned;
+		if (list == null) {
+			synchronized (this) {
+				list = this.planned;
+				if (list == null) this.planned = list = DeepStarts.plan(seed, this.bounds, this.layout, this.terrain(seed), templates, registryAccess, vaultExitZ);
+			}
+		}
+		return list;
+	}
+
+	/** The {@code start_height} in deep_trial_vault.json. */
+	private static final int VAULT_JSON_START_Y = 385;
+
+	/** Chunk where the Trial Vault starts: the one holding (centre x, vault z). */
+	public ChunkPos vaultChunk(long seed) {
+		return new ChunkPos(this.bounds.centerX() >> 4, DeepStarts.vaultZ(seed, this.bounds) >> 4);
+	}
+
+	private void createTallStarts(
+		RegistryAccess registryAccess, ChunkGeneratorStructureState state, StructureManager structureManager, ChunkAccess chunk,
+		StructureTemplateManager templates, ResourceKey<Level> level
+	) {
+		long seed = state.getLevelSeed();
+		ChunkPos pos = chunk.getPos();
+		var structures = registryAccess.lookupOrThrow(Registries.STRUCTURE);
+
+		// surface villages: bigger (jigsaw hooks) and always with a farm
+		VillageFarms.Ground surface = VillageFarms.surface(this, chunk.getHeightAccessorForGeneration(), state.randomState());
+		for (Map.Entry<Structure, StructureStart> entry : List.copyOf(chunk.getAllStarts().entrySet())) {
+			StructureStart start = entry.getValue();
+			if (!start.isValid() || isDeepKey(registryAccess, entry.getKey()) || !VillageFarms.isVillage(start)) continue;
+			StructureStart farmed = VillageFarms.ensure(start, registryAccess, templates, this.bounds, seed, surface);
+			if (farmed != start) chunk.setStartForStructure(entry.getKey(), farmed);
+		}
+
+		// hand-placed starts (the pyramid has its own code); the layer under the vault avoids its exit
+		VaultChoice vaultChoice = this.layout.vaultLayer >= 1 ? this.vaultChoice(registryAccess, state, templates, level) : null;
+		List<DeepStarts.Planned> plans = this.planned(seed, templates, registryAccess, vaultChoice == null ? null : vaultChoice.plan().ez);
+		for (DeepStarts.Planned plan : plans) {
+			if (!plan.chunk().equals(pos) || plan.key().equals(DEEP_PYRAMID)) continue;
+			Structure structure = structures.getValue(plan.key());
+			List<StructurePiece> pieces = plan.pieces().get();
+			if (structure == null || pieces.isEmpty()) {
+				AntCraft.LOGGER.warn("AntCraft: {} not placed ({})", plan.key().identifier(), structure == null ? "structure missing" : "no site");
+				continue;
+			}
+			StructureStart previous = structureManager.getStartForStructure(structure, chunk);
+			StructureStart start = new StructureStart(structure, pos, previous != null ? previous.getReferences() : 0, new PiecesContainer(pieces));
+			structureManager.setStartForStructure(structure, start, chunk);
+			AntCraft.LOGGER.info("AntCraft: {} placed, bounds {}", plan.key().identifier(), start.getBoundingBox());
+		}
+
+		// projected jigsaw copies on the forest floor (trail ruins, camps, the outpost)
+		Object[][] projected = {{"deep_trail_ruins", DeepStarts.TRAIL_RUINS, 8600L}, {"deep_abandoned_camp_dappled", DeepStarts.CAMP_DAPPLED, 8700L},
+			{"deep_abandoned_camp_pale", DeepStarts.CAMP_PALE, 8800L}, {"deep_pillager_outpost", DeepStarts.OUTPOST, 8900L}};
+		for (int layer = 1; layer <= this.layout.deepLayers; layer++) {
+			for (Object[] p : projected) {
+				if (!this.layout.layer(layer).extraStructures().contains((String) p[0])) continue;
+				if (!pos.equals(DeepStarts.projectedChunk(seed, this.bounds, this.layout, layer, (Long) p[2]))) continue;
+				@SuppressWarnings("unchecked")
+				ResourceKey<Structure> key = (ResourceKey<Structure>) p[1];
+				this.startDeepStructure(key, this.layout.forestFloor(layer) + 1, null, registryAccess, state, structureManager, chunk, templates, level);
+			}
+		}
+
+		// mineshafts in the cave bands
+		for (int layer = 1; layer <= this.layout.deepLayers; layer++) {
+			if (this.layout.layer(layer).mineshaft() == LayerSpec.Mineshaft.NONE || !pos.equals(DeepStarts.mineshaftChunk(seed, this.bounds, layer))) continue;
+			Structure structure = structures.getValue(DeepStarts.mineshaft(layer));
+			if (structure == null) continue;
+			List<BoundingBox> footprints = new ArrayList<>();
+			for (DeepStarts.Planned plan : plans) if (plan.layer() == layer) footprints.addAll(plan.footprint());
+			List<StructurePiece> pieces = DeepStarts.buildMineshaft(seed, this.bounds, this.layout, this.terrain(seed), layer, footprints);
+			if (pieces.isEmpty()) continue;
+			StructureStart previous = structureManager.getStartForStructure(structure, chunk);
+			StructureStart start = new StructureStart(structure, pos, previous != null ? previous.getReferences() : 0, new PiecesContainer(pieces));
+			structureManager.setStartForStructure(structure, start, chunk);
+			AntCraft.LOGGER.info("AntCraft: {} placed, {} pieces, bounds {}", DeepStarts.mineshaft(layer).identifier(), pieces.size(), start.getBoundingBox());
+		}
+
+		// the Trial Vault
+		if (this.layout.vaultLayer >= 1 && pos.equals(this.vaultChunk(seed))) this.startVault(registryAccess, state, structureManager, chunk, templates, level);
+	}
+
+	/** The chosen Trial Vault: its pieces (final coordinates), plan, and which try it was. */
+	public record VaultChoice(List<StructurePiece> pieces, VaultPlan plan, int tryIndex, int grade, long millis) {}
+
+	private volatile @Nullable VaultChoice vaultChoice;
+	private volatile boolean vaultChosen;
+
+	/** Vault tries: best of 8, of up to 16 while no try grows both ways (3.5.6 tuning), of up to 32 while none has an entrance. */
+	static final int VAULT_TRIES = 16, VAULT_MAX_TRIES = 32;
+
+	/**
+	 * The Trial Vault (spec 3.5.2), a pure function of seed, bounds and layout, computed once per
+	 * generator: the best of the tries, or null if none generated. The hand-placed starts of the
+	 * layer below need it (they avoid the vault exit's fall line), so it is chosen before them.
+	 */
+	public @Nullable VaultChoice vaultChoice(RegistryAccess registryAccess, ChunkGeneratorStructureState state, StructureTemplateManager templates, ResourceKey<Level> level) {
+		if (this.vaultChosen) return this.vaultChoice;
+		synchronized (this) {
+			if (!this.vaultChosen) {
+				this.vaultChoice = this.chooseVault(registryAccess, state, templates, level);
+				this.vaultChosen = true;
+			}
+			return this.vaultChoice;
+		}
+	}
+
+	private @Nullable VaultChoice chooseVault(RegistryAccess registryAccess, ChunkGeneratorStructureState state, StructureTemplateManager templates, ResourceKey<Level> level) {
+		Holder<Structure> holder = registryAccess.lookupOrThrow(Registries.STRUCTURE).get(VaultPlan.KEY).orElse(null);
+		if (holder == null) {
+			AntCraft.LOGGER.error("AntCraft: structure {} is missing", VaultPlan.KEY.identifier());
+			return null;
+		}
+		long t0 = System.nanoTime();
+		long seed = state.getLevelSeed();
+		int margin = vaultMargin(this.bounds);
+		StructureStart best = null;
+		VaultPlan bestPlan = null;
+		long bestScore = Long.MIN_VALUE;
+		int chosen = -1;
+		for (int i = 0; i < VAULT_MAX_TRIES; i++) {
+			// the spec's 8 tries; up to 16 while no try grows both up and down; more only while none has an entrance
+			boolean usable = bestPlan != null && VaultPlan.grade(bestPlan) >= 1;
+			if (i >= 8 && usable && bestPlan.growsBothWays() || i >= VAULT_TRIES && usable) break;
+			StructureStart start = this.vaultTry(holder, registryAccess, state, templates, level, Strip.mix(seed, 9500 + i), this.bounds, margin, vaultRotation(i));
+			if (start == null) continue;
+			VaultPlan plan = VaultPlan.of(start, this.bounds);
+			if (plan == null) continue;
+			long score = VaultPlan.score(plan);
+			AntCraft.LOGGER.info("AntCraft: trial vault try {}: {} pieces, {} chamber rooms, y {}..{}, grade {}", i, start.getPieces().size(), plan.chamberRooms,
+				plan.minY(), plan.maxY(), VaultPlan.grade(plan));
+			if (score > bestScore) {
+				best = start;
+				bestPlan = plan;
+				bestScore = score;
+				chosen = i;
+			}
+			if (VaultPlan.grade(plan) == 2) break;
+		}
+		long millis = (System.nanoTime() - t0) / 1_000_000;
+		if (best == null) {
+			AntCraft.LOGGER.error("AntCraft: the trial vault failed to generate");
+			return null;
+		}
+		if (!bestPlan.entranceValid) AntCraft.LOGGER.warn("AntCraft: no trial vault try has an entrance column; using the start piece centre {}", bestPlan);
+		return new VaultChoice(List.copyOf(best.getPieces()), bestPlan, chosen, VaultPlan.grade(bestPlan), millis);
+	}
+
+	/**
+	 * The start piece rotation of vault try i: the two that point the start's corridor along the
+	 * strip, alternating. (The other two point it at a wall, and then the jigsaw dies after the
+	 * start piece in about half the tries; spec 3.5.6 tuning.)
+	 */
+	static net.minecraft.world.level.block.@Nullable Rotation vaultRotation(int i) {
+		if (StructureAudit.enabled() && Integer.getInteger("antcraft.vaultRotation") != null) {
+			int r = Integer.getInteger("antcraft.vaultRotation");
+			return r < 0 ? null : net.minecraft.world.level.block.Rotation.values()[r & 3];
+		}
+		return (i & 1) == 0 ? net.minecraft.world.level.block.Rotation.NONE : net.minecraft.world.level.block.Rotation.CLOCKWISE_180;
+	}
+
+	/** Jigsaw depth of the vault (the JSON's size is capped at 20 by its codec). */
+	static int vaultDepth() {
+		int depth = 20;
+		if (StructureAudit.enabled()) depth = Integer.getInteger("antcraft.vaultDepth", depth);
+		return depth;
+	}
+
+	/** {@code M} of spec 3.5.2: how far vault pieces may overhang each strip wall. */
+	static int vaultMargin(StripBounds bounds) {
+		int margin = Math.clamp((30 - bounds.width()) / 2, 0, 6);
+		if (StructureAudit.enabled()) margin = Integer.getInteger("antcraft.vaultMargin", margin); // tuning runs only (spec 3.5.6)
+		return margin;
+	}
+
+	/**
+	 * One vault try: the jigsaw grown from a start piece in the middle of the vault's jigsaw space,
+	 * kept inside the strip (plus the overhang) and moved onto (centre x, vault z). Null if the
+	 * jigsaw failed. {@code bounds} is the real strip's except in tuning runs.
+	 */
+	public @Nullable StructureStart vaultTry(
+		Holder<Structure> holder, RegistryAccess registryAccess, ChunkGeneratorStructureState state, StructureTemplateManager templates, ResourceKey<Level> level,
+		long trySeed, StripBounds bounds, int margin, net.minecraft.world.level.block.@Nullable Rotation rotation
+	) {
+		int vaultZ = DeepStarts.vaultZ(state.getLevelSeed(), bounds);
+		ChunkPos chunkPos = new ChunkPos(bounds.centerX() >> 4, vaultZ >> 4);
+		int vault = this.layout.vaultLayer;
+		int minY = this.layout.layerBottom(vault) + 2, maxY = this.layout.layerTop(vault) - 6;
+		LevelHeightAccessor space = LevelHeightAccessor.create(minY, maxY - minY + 1);
+		WorldGenShift.VaultContext context = new WorldGenShift.VaultContext(bounds, vaultZ, margin, maxY, rotation, vaultDepth());
+		// the JSON's absolute start height (385) moves to the layout's vault start (no frame shift: it is a real y)
+		StructureStart start = WorldGenShift.withVault(context, () -> WorldGenShift.withOverride(this.layout.vaultStartY - VAULT_JSON_START_Y, () -> holder.value().generate(
+			holder, level, registryAccess, this, this.biomeSource, state.randomState().createClimateSampler(SamplerContext.EMPTY_UNCACHED), state.randomState(),
+			templates, trySeed, chunkPos, 0, space, biome -> true
+		)));
+		if (!start.isValid()) return null;
+		BoundingBox centre = start.getPieces().getFirst().getBoundingBox();
+		int dx = bounds.centerX() - (centre.minX() + centre.maxX()) / 2, dz = vaultZ - (centre.minZ() + centre.maxZ()) / 2;
+		for (StructurePiece piece : start.getPieces()) piece.move(dx, 0, dz);
+		return new StructureStart(holder.value(), chunkPos, 0, new PiecesContainer(start.getPieces()));
+	}
+
+	/** Places the chosen vault in its start chunk. */
+	private void startVault(
+		RegistryAccess registryAccess, ChunkGeneratorStructureState state, StructureManager structureManager, ChunkAccess chunk,
+		StructureTemplateManager templates, ResourceKey<Level> level
+	) {
+		Structure structure = registryAccess.lookupOrThrow(Registries.STRUCTURE).getValue(VaultPlan.KEY);
+		VaultChoice choice = this.vaultChoice(registryAccess, state, templates, level);
+		if (structure == null || choice == null) return;
+		StructureStart previous = structureManager.getStartForStructure(structure, chunk);
+		int references = previous != null ? previous.getReferences() : 0;
+		StructureStart start = new StructureStart(structure, chunk.getPos(), references, new PiecesContainer(choice.pieces()));
+		structureManager.setStartForStructure(structure, start, chunk);
+		AntCraft.LOGGER.info("AntCraft: {} placed (try {}, grade {}, chosen in {} ms): {}", VaultPlan.KEY.identifier(), choice.tryIndex(), choice.grade(), choice.millis(), choice.plan());
 	}
 
 	/**
@@ -562,20 +866,15 @@ public final class StripChunkGenerator extends ChunkGenerator implements Wrapped
 		}
 		Structure structure = holder.value();
 		ChunkPos pos = chunk.getPos();
-		int west = this.bounds.centerX() - StripLayout.PYRAMID_SIZE / 2;
-		int north = pos.getMinBlockZ() + StripLayout.PYRAMID_OFFSET_Z;
-		net.minecraft.util.RandomSource random = net.minecraft.util.RandomSource.create(Strip.mix(seed, 8001));
-		DesertPyramidPiece piece = new DesertPyramidPiece(random, west, north);
-		for (int i = 0; i < 64 && piece.getOrientation() != Direction.NORTH && piece.getOrientation() != Direction.SOUTH; i++) {
-			piece = new DesertPyramidPiece(random, west, north);
-		}
-		piece.move(0, this.layout.forestFloor(this.layout.desertLayer) - piece.getBoundingBox().minY(), 0);
-		((ScatteredFeaturePieceAccessor) piece).antcraft$setHeightPosition(0);
+		DesertPyramidPiece piece = DeepStarts.buildPyramid(seed, this.bounds, this.layout, pos);
 		StructureStart previous = structureManager.getStartForStructure(structure, chunk);
 		StructureStart start = new StructureStart(structure, pos, previous != null ? previous.getReferences() : 0, new PiecesContainer(List.of(piece)));
 		structureManager.setStartForStructure(structure, start, chunk);
 		AntCraft.LOGGER.info("AntCraft: {} placed facing {}, bounds {}", DEEP_PYRAMID.identifier(), piece.getOrientation(), start.getBoundingBox());
 	}
+
+	/** Tries per projected deep start in tall layouts (see {@link #startDeepStructure}). */
+	static final int DEEP_START_TRIES = 4;
 
 	/**
 	 * Starts one of our deep structures in this chunk. They have no structure sets, so the game would
@@ -585,6 +884,7 @@ public final class StripChunkGenerator extends ChunkGenerator implements Wrapped
 	private void startDeepStructure(
 		ResourceKey<Structure> key,
 		@Nullable Integer ground,
+		@Nullable LevelHeightAccessor heightAccessor,
 		RegistryAccess registryAccess,
 		ChunkGeneratorStructureState state,
 		StructureManager structureManager,
@@ -600,37 +900,68 @@ public final class StripChunkGenerator extends ChunkGenerator implements Wrapped
 		Structure structure = holder.value();
 		StructureStart previous = structureManager.getStartForStructure(structure, chunk);
 		RandomState randomState = state.randomState();
-		DEEP_GROUND.set(ground);
-		StructureStart start;
-		try {
-			start = structure.generate(
-			holder,
-			level,
-			registryAccess,
-			this,
-			this.biomeSource,
-			randomState.createClimateSampler(SamplerContext.EMPTY_UNCACHED),
-			randomState,
-			structureTemplateManager,
-			state.getLevelSeed(),
-			chunk.getPos(),
-			previous != null ? previous.getReferences() : 0,
-			chunk,
-			biome -> true
-		);
-		} finally {
-			DEEP_GROUND.remove();
-		}
-		if (start.isValid() && ground != null) {
-			// The jigsaw start sits at the chunk corner and can rotate away from the narrow strip.
-			// Shift the whole village sideways so its centre piece is in the middle of the strip.
-			BoundingBox centre = start.getPieces().getFirst().getBoundingBox();
-			int dx = this.bounds.centerX() - (centre.minX() + centre.maxX()) / 2;
-			for (StructurePiece piece : start.getPieces()) piece.move(dx, 0, 0);
+		// Tall layouts: projected deep starts (villages, ruins, camps, outpost) get a few tries; a try
+		// whose centre piece is wider than the strip is only kept if no other fits, and villages keep
+		// the try with the most pieces. Layout 1 keeps its single try (its worlds must not change).
+		boolean tall = this.layout.id >= 2 && ground != null;
+		int tries = tall ? DEEP_START_TRIES : 1;
+		StructureStart start = StructureStart.INVALID_START;
+		long bestScore = Long.MIN_VALUE;
+		for (int t = 0; t < tries; t++) {
+			long seed = t == 0 ? state.getLevelSeed() : Strip.mix(state.getLevelSeed(), 9150 + t);
+			DEEP_GROUND.set(ground);
+			StructureStart attempt;
+			try {
+				attempt = structure.generate(
+				holder,
+				level,
+				registryAccess,
+				this,
+				this.biomeSource,
+				randomState.createClimateSampler(SamplerContext.EMPTY_UNCACHED),
+				randomState,
+				structureTemplateManager,
+				seed,
+				chunk.getPos(),
+				previous != null ? previous.getReferences() : 0,
+				heightAccessor != null ? heightAccessor : chunk,
+				biome -> true
+			);
+			} finally {
+				DEEP_GROUND.remove();
+			}
+			if (!attempt.isValid()) continue;
+			if (ground != null) {
+				// The jigsaw start sits at the chunk corner and can rotate away from the narrow strip.
+				// Shift the whole village sideways so its centre piece is in the middle of the strip.
+				BoundingBox centre = attempt.getPieces().getFirst().getBoundingBox();
+				int dx = this.bounds.centerX() - (centre.minX() + centre.maxX()) / 2;
+				for (StructurePiece piece : attempt.getPieces()) piece.move(dx, 0, 0);
+			}
+			if (!tall) {
+				start = attempt;
+				break;
+			}
+			BoundingBox centre = attempt.getPieces().getFirst().getBoundingBox();
+			boolean fits = centre.minX() >= this.bounds.minX() && centre.maxX() <= this.bounds.maxX();
+			boolean village = VillageFarms.isVillage(attempt);
+			boolean farm = false;
+			if (village) {
+				// tall layouts: every deep village gets a farm (a try with no room left for one loses)
+				attempt = VillageFarms.ensure(attempt, registryAccess, structureTemplateManager, this.bounds, state.getLevelSeed(), VillageFarms.deep(ground - 1), false);
+				farm = VillageFarms.hasFarm(attempt);
+			}
+			long score = (fits ? 1L << 33 : 0L) + (farm ? 1L << 32 : 0L) + (village ? attempt.getPieces().size() : 0);
+			if (score > bestScore) {
+				bestScore = score;
+				start = attempt;
+			}
+			if (fits && !village) break; // ruins, camps, the outpost: the first try that fits
 		}
 		if (start.isValid()) {
 			structureManager.setStartForStructure(structure, start, chunk);
-			AntCraft.LOGGER.info("AntCraft: {} placed, bounds {}", key.identifier(), start.getBoundingBox());
+			if (tall && VillageFarms.isVillage(start) && !VillageFarms.hasFarm(start)) AntCraft.LOGGER.warn("AntCraft: no spot for a farm in the village at {}", chunk.getPos());
+			AntCraft.LOGGER.info("AntCraft: {} placed, {} pieces, bounds {}", key.identifier(), start.getPieces().size(), start.getBoundingBox());
 		} else {
 			AntCraft.LOGGER.warn("AntCraft: {} failed to generate", key.identifier());
 		}

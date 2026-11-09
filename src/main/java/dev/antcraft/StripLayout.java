@@ -59,7 +59,8 @@ public final class StripLayout {
 		new int[] {0, 196, 196, 196, 196, 196, 196, 128, 196, 196, 196, 196, 196, 196, 196, 196, 196, 196, 196},
 		3, 6, 40,
 		12, -597,
-		5, 13, 16, 7, 385,
+		// vaultStartY: 385 in the spec, lowered by 8 by the 3.5.6 tuning gate (median exit well was 46 > 40)
+		5, 13, 16, 7, 377,
 		guardians(Map.of(
 			0, GuardianId.TUNNEL_CAPTAIN, 2, GuardianId.DEEP_BEAST, 4, GuardianId.CANYON_CONJURER, 8, GuardianId.BROOD_MOTHER,
 			11, GuardianId.GALE_LORD, 14, GuardianId.DESERT_COLOSSUS, 18, GuardianId.EMBER_LORD

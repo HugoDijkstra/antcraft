@@ -372,6 +372,34 @@ public final class ArenaManager {
 				placeIfAir(level, new BlockPos(x + (x == bounds.minX() ? 1 : -1), ceilingY, z), Blocks.COBWEB.defaultBlockState());
 			}
 		}
+		if (theme.extraCobwebs()) {
+			// the Brood Mother's nest: webs on every pillar top and in every corner, vines on the pillars
+			for (int x : new int[] {bounds.minX() + 1, bounds.maxX() - 1}) {
+				for (int dz : new int[] {-8, -4, 4, 8}) {
+					int z = hz + dz;
+					if (z < zLo || z > zHi || nearHole(x, z, hx, hz)) continue;
+					BlockPos top = new BlockPos(x, ceilingY, z);
+					if (!level.getBlockState(top).is(theme.accentPillar().getBlock())) continue;
+					int inward = x == bounds.minX() + 1 ? 1 : -1;
+					placeIfAir(level, new BlockPos(x + inward, ceilingY, z), Blocks.COBWEB.defaultBlockState());
+					for (int side = -1; side <= 1; side += 2) {
+						// vines hang on the pillar from the z side (the block north or south of it)
+						net.minecraft.world.level.block.state.properties.BooleanProperty face = side < 0
+							? net.minecraft.world.level.block.VineBlock.SOUTH : net.minecraft.world.level.block.VineBlock.NORTH;
+						for (int y = floorTop + 2; y < ceilingY; y++) {
+							placeIfAir(level, new BlockPos(x, y, z + side), Blocks.VINE.defaultBlockState().setValue(face, true));
+						}
+					}
+				}
+			}
+			for (int x : new int[] {bounds.minX(), bounds.maxX()}) {
+				for (int z : new int[] {zLo, zHi}) {
+					placeIfAir(level, new BlockPos(x, floorTop + 1, z), Blocks.COBWEB.defaultBlockState());
+					placeIfAir(level, new BlockPos(x + (x == bounds.minX() ? 1 : -1), ceilingY - 1, z), Blocks.COBWEB.defaultBlockState());
+					placeIfAir(level, new BlockPos(x, ceilingY, z + (z == zLo ? 1 : -1)), Blocks.COBWEB.defaultBlockState());
+				}
+			}
+		}
 		level.setBlockAndUpdate(marker, Blocks.CHISELED_POLISHED_BLACKSTONE.defaultBlockState());
 	}
 
@@ -398,7 +426,8 @@ public final class ArenaManager {
 
 	/**
 	 * Teleports a player standing at a lit teleporter to the boss room on the floor above (onto its
-	 * teleporter), or from the first boss room to the surface spawn.
+	 * teleporter), or from the first boss room to the surface spawn. Tall layouts: sneaking sends
+	 * the player down instead, to the deepest boss room that is cleared.
 	 */
 	static void teleportUp(ServerLevel level, ServerPlayer player, BlockPos from) {
 		StripBounds bounds = Strip.bounds(level);
@@ -410,7 +439,24 @@ public final class ArenaManager {
 			if (!from.equals(teleporterPos(layout, seed, floors[i], bounds))) continue;
 			BlockPos target;
 			Component where;
-			if (i == 0) {
+			boolean down = layout.id >= 2 && player.isShiftKeyDown();
+			if (down) {
+				int deepest = -1;
+				for (int j = floors.length - 1; j > i; j--) {
+					if (data(level).get(floors[j]).state() == CLEARED) {
+						deepest = floors[j];
+						break;
+					}
+				}
+				if (deepest < 0) {
+					player.sendOverlayMessage(Component.translatableWithFallback("antcraft.teleporter.no_deeper", "No deeper guardian is defeated yet"));
+					return;
+				}
+				BlockPos pad = teleporterPos(layout, seed, deepest, bounds);
+				placeTeleporter(level, layout, seed, deepest, bounds, true);
+				target = pad.above();
+				where = guardianName(layout, deepest);
+			} else if (i == 0) {
 				BlockPos spawn = level.getRespawnData().pos();
 				int y = level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, spawn.getX(), spawn.getZ());
 				target = new BlockPos(spawn.getX(), Math.max(y, spawn.getY()), spawn.getZ());
@@ -425,7 +471,9 @@ public final class ArenaManager {
 			level.playSound(null, from, SoundEvents.ENDERMAN_TELEPORT, SoundSource.PLAYERS, 1.0F, 1.0F);
 			player.teleportTo(level, target.getX() + 0.5, target.getY(), target.getZ() + 0.5, java.util.Set.of(), player.getYRot(), player.getXRot(), true);
 			level.playSound(null, target, SoundEvents.ENDERMAN_TELEPORT, SoundSource.PLAYERS, 1.0F, 1.0F);
-			player.sendOverlayMessage(Component.translatableWithFallback("antcraft.teleporter.arrived", "Teleported up to %s", where));
+			player.sendOverlayMessage(down
+				? Component.translatableWithFallback("antcraft.teleporter.arrived_down", "Teleported down to %s", where)
+				: Component.translatableWithFallback("antcraft.teleporter.arrived", "Teleported up to %s", where));
 			return;
 		}
 	}
@@ -537,6 +585,12 @@ public final class ArenaManager {
 		for (int floor : layout.guardianFloors()) {
 			Arena arena = data.get(floor);
 			if (arena.state() == FIGHTING && arena.guardian().isPresent() && arena.guardian().get().equals(entity.getUUID())) {
+				if (entity.getType() == EntityTypes.EVOKER) {
+					// the Canyon Conjurer's vexes vanish with it
+					AABB area = roomBox(layout, level.getSeed(), floor, bounds).inflate(16);
+					for (net.minecraft.world.entity.monster.Vex vex : level.getEntitiesOfClass(net.minecraft.world.entity.monster.Vex.class, area,
+						v -> v.getOwner() == null || v.getOwner() == entity)) vex.discard();
+				}
 				win(level, layout, bounds, level.getSeed(), floor);
 				if (source.getEntity() instanceof ServerPlayer killer) LayerTracker.award(killer, advancementFor(layout, floor), "defeated");
 				return;
