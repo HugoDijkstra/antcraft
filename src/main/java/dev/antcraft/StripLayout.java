@@ -33,7 +33,7 @@ import net.minecraft.world.level.ChunkPos;
  * The geometry methods are pure arithmetic (no Minecraft bootstrap needed); the layer table
  * ({@link #layer(int)}) is built on first use because it holds block states.
  */
-public final class StripLayout {
+public final class StripLayout implements ArenaLayout {
 	/** The pyramid is 21 x 21 blocks; its north edge sits this far into its start chunk. */
 	public static final int PYRAMID_SIZE = 21, PYRAMID_OFFSET_Z = 4;
 
@@ -236,11 +236,22 @@ public final class StripLayout {
 
 	// ------------------------------------------------------------------ gates
 
+	@Override
+	public int arenaLayoutId() {
+		return this.id;
+	}
+
+	@Override
+	public int hallHeight() {
+		return this.hallHeight;
+	}
+
 	public boolean isGuardianFloor(int k) {
 		return this.guardians.containsKey(k);
 	}
 
 	/** Guardian floors, ascending (a copy). */
+	@Override
 	public int[] guardianFloors() {
 		return this.guardianFloors.clone();
 	}
@@ -254,6 +265,7 @@ public final class StripLayout {
 	}
 
 	/** Who guards floor k, or null. */
+	@Override
 	public @org.jspecify.annotations.Nullable GuardianId guardian(int k) {
 		return this.guardians.get(k);
 	}

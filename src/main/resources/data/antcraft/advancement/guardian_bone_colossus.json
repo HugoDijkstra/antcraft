@@ -1,0 +1,27 @@
+{
+  "parent": "antcraft:guardian_brute_warlord",
+  "display": {
+    "icon": {
+      "id": "minecraft:bone_block"
+    },
+    "title": {
+      "translate": "advancements.antcraft.guardian_bone_colossus.title",
+      "fallback": "Bonebreaker"
+    },
+    "description": {
+      "translate": "advancements.antcraft.guardian_bone_colossus.description",
+      "fallback": "Defeat the Bone Colossus in the Soulfire Chasm"
+    },
+    "frame": "challenge"
+  },
+  "criteria": {
+    "defeated": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "defeated"
+    ]
+  ]
+}

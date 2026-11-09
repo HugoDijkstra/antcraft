@@ -2,6 +2,8 @@ package dev.antcraft.mixin;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import dev.antcraft.NetherLayout;
+import dev.antcraft.NetherStripChunkGenerator;
 import dev.antcraft.Strip;
 import dev.antcraft.StripBounds;
 import dev.antcraft.StripLayout;
@@ -72,27 +74,41 @@ public abstract class PortalForcerMixin {
 		return layout != null && layout.frameOffset != 0 ? layout : null;
 	}
 
+	/** The tall Nether (layout 3), or null. */
+	private NetherLayout antcraft$tallNether() {
+		return this.level.getChunkSource().getGenerator() instanceof NetherStripChunkGenerator nether && nether.netherLayout().tall() ? nether.netherLayout() : null;
+	}
+
 	/**
 	 * Hook 14 (rule 1, banded creation): in a tall overworld new portals are built in the moved
-	 * vanilla band only, 1643..2015; the fallback platform goes to 70 + 1696 (at most 2006).
+	 * vanilla band only, 1643..2015, the fallback platform at 70 + 1696 (at most 2006); in the tall
+	 * Nether in 1915..2026 (above the NF0 tunnel, under the bedrock roof), the platform at 1974 (at most 2017).
 	 */
 	@WrapOperation(method = "createPortal", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerLevel;getMinY()I"))
 	private int antcraft$bandBottom(ServerLevel level, Operation<Integer> original) {
 		int y = original.call(level);
 		StripLayout layout = this.antcraft$tall();
-		return layout == null ? y : Math.max(y, layout.hallBottom(0) + layout.hallHeight + 1);
+		if (layout != null) return Math.max(y, layout.hallBottom(0) + layout.hallHeight + 1);
+		NetherLayout nether = this.antcraft$tallNether();
+		return nether == null ? y : Math.max(y, NETHER_BAND_MIN);
 	}
 
 	@WrapOperation(method = "createPortal", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerLevel;getMaxY()I"))
 	private int antcraft$bandTop(ServerLevel level, Operation<Integer> original) {
 		int y = original.call(level);
 		StripLayout layout = this.antcraft$tall();
-		return layout == null ? y : Math.min(y, layout.vanillaMinY + 384 - 1);
+		if (layout != null) return Math.min(y, layout.vanillaMinY + 384 - 1);
+		NetherLayout nether = this.antcraft$tallNether();
+		return nether == null ? y : Math.min(y, NETHER_BAND_MAX);
 	}
 
 	@ModifyConstant(method = "createPortal", constant = @Constant(intValue = 70))
 	private int antcraft$platformHeight(int value) {
 		StripLayout layout = this.antcraft$tall();
-		return layout == null ? value : value + layout.frameOffset;
+		if (layout != null) return value + layout.frameOffset;
+		NetherLayout nether = this.antcraft$tallNether();
+		return nether == null ? value : value + nether.frameOffset;
 	}
+
+	private static final int NETHER_BAND_MIN = 1915, NETHER_BAND_MAX = 2026;
 }

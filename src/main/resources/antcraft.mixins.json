@@ -23,6 +23,7 @@
 		"IglooDeepMixin",
 		"JigsawStartHeightMixin",
 		"JigsawStripMixin",
+		"MobAccessor",
 		"NaturalSpawnerMixin",
 		"NetherFortressMixin",
 		"NoiseChunkBeardMixin",

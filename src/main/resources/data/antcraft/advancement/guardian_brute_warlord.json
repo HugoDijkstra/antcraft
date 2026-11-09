@@ -1,0 +1,27 @@
+{
+  "parent": "antcraft:guardian_molten_sovereign",
+  "display": {
+    "icon": {
+      "id": "minecraft:golden_axe"
+    },
+    "title": {
+      "translate": "advancements.antcraft.guardian_brute_warlord.title",
+      "fallback": "Brute Force"
+    },
+    "description": {
+      "translate": "advancements.antcraft.guardian_brute_warlord.description",
+      "fallback": "Defeat the Brute Warlord in the Gilded Halls"
+    },
+    "frame": "challenge"
+  },
+  "criteria": {
+    "defeated": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "defeated"
+    ]
+  ]
+}

@@ -28,6 +28,8 @@ public final class FrameTerrain {
 
 	/** The vanilla overworld's height range (frame coordinates). */
 	public static final LevelHeightAccessor OVERWORLD_FRAME = LevelHeightAccessor.create(-64, 384);
+	/** The vanilla Nether's height range (frame coordinates). */
+	public static final LevelHeightAccessor NETHER_FRAME = LevelHeightAccessor.create(0, 128);
 
 	/** Only used to fill missing sections, which never happens (every section of the real chunk exists); cached at server start. */
 	private static volatile @Nullable PalettedContainerFactory fallbackFactory;

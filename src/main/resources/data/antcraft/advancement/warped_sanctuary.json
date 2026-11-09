@@ -1,0 +1,27 @@
+{
+  "parent": "antcraft:guardian_hoglin_warlord",
+  "display": {
+    "icon": {
+      "id": "minecraft:respawn_anchor"
+    },
+    "title": {
+      "translate": "advancements.antcraft.warped_sanctuary.title",
+      "fallback": "Sanctuary"
+    },
+    "description": {
+      "translate": "advancements.antcraft.warped_sanctuary.description",
+      "fallback": "Reach the Warped Sanctuary, the Nether's quiet depth"
+    },
+    "frame": "task"
+  },
+  "criteria": {
+    "reached": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "reached"
+    ]
+  ]
+}

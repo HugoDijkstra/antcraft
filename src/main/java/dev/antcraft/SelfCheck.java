@@ -37,6 +37,7 @@ public final class SelfCheck {
 				.then(Commands.literal("selfcheck").executes(SelfCheck::run))
 				.then(Commands.literal("audit").requires(source -> StructureAudit.enabled())
 					.then(Commands.literal("structures").executes(StructureAudit::run))
+					.then(Commands.literal("spawns").executes(StructureAudit::spawns))
 					.then(Commands.literal("vault").then(Commands.argument("count", com.mojang.brigadier.arguments.IntegerArgumentType.integer(1, 1000))
 						.executes(c -> StructureAudit.vault(c, 0, 0))
 						.then(Commands.argument("width", com.mojang.brigadier.arguments.IntegerArgumentType.integer(4, 200))

@@ -33,13 +33,18 @@ public final class LayerTracker {
 
 	/** Last deep layer seen per player (server thread only). */
 	private static final Map<UUID, Integer> LAST_LAYER = new HashMap<>();
+	/** The same for the tall Nether's depths. */
+	private static final Map<UUID, Integer> LAST_NETHER_LAYER = new HashMap<>();
 
 	/** How far from a closed hole (horizontally, in the hall above it) the hint shows. */
 	private static final int HINT_RADIUS = 5;
 
 	public static void register() {
 		ServerTickEvents.END_SERVER_TICK.register(LayerTracker::tick);
-		ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> LAST_LAYER.remove(handler.player.getUUID()));
+		ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
+			LAST_LAYER.remove(handler.player.getUUID());
+			LAST_NETHER_LAYER.remove(handler.player.getUUID());
+		});
 	}
 
 	/** The name of a layer: its theme's, or "The Surface" for the vanilla layer. */
@@ -61,8 +66,14 @@ public final class LayerTracker {
 			if (level.dimension() == Level.END) award(player, "enter_end", "entered_end");
 			if (level != overworld) {
 				LAST_LAYER.remove(player.getUUID());
+				if (level.getChunkSource().getGenerator() instanceof NetherStripChunkGenerator nether && nether.netherLayout().tall()) {
+					trackNether(player, level, nether, titles, tick);
+				} else {
+					LAST_NETHER_LAYER.remove(player.getUUID());
+				}
 				continue;
 			}
+			LAST_NETHER_LAYER.remove(player.getUUID());
 			if (layout == null) continue; // a strip Nether or End as the overworld: no layers
 			int layer = layout.layerAt(player.getBlockY());
 			if (layer < 0) continue; // inside a bedrock floor: keep the last layer
@@ -77,6 +88,38 @@ public final class LayerTracker {
 			if (titles && tick % 40 == 0) {
 				Component hint = holeHint(overworld, layout, player);
 				if (hint != null) player.sendOverlayMessage(hint);
+			}
+		}
+	}
+
+	/** The tall Nether (layout 3): depth titles, the depth advancements and the boss-room hint. */
+	private static void trackNether(ServerPlayer player, ServerLevel level, NetherStripChunkGenerator nether, boolean titles, int tick) {
+		NetherLayout layout = nether.netherLayout();
+		int layer = layout.layerAt(player.getBlockY());
+		if (layer < 0) return;
+		Integer last = LAST_NETHER_LAYER.put(player.getUUID(), layer);
+		if (layer >= 1 && (last == null || last != layer)) {
+			if (layer >= 1) award(player, "nether_depths", "reached");
+			if (layer == 5) award(player, "warped_sanctuary", "reached");
+			if (layer == layout.deepLayers) award(player, "ember_forge", "reached");
+			if (titles) {
+				player.connection.send(new ClientboundSetTitlesAnimationPacket(10, 50, 20));
+				player.connection.send(new ClientboundSetSubtitleTextPacket(Component.translatableWithFallback("antcraft.nether_layer.subtitle", "Nether Depth %s", layer)));
+				player.connection.send(new ClientboundSetTitleTextPacket(layout.row(layer).displayName()));
+			}
+		}
+		if (titles && tick % 40 == 0) {
+			StripBounds bounds = nether.bounds();
+			long seed = level.getSeed();
+			int y = player.getBlockY();
+			for (int k : layout.guardianFloors()) {
+				int floorTop = layout.floorTop(k);
+				if (y <= floorTop || y > floorTop + layout.hallHeight) continue;
+				BlockPos hole = new BlockPos(layout.holeX(seed, k, bounds), floorTop, layout.holeZ(seed, k, bounds));
+				if (Math.abs(player.getBlockX() - hole.getX()) > HINT_RADIUS || Math.abs(player.getBlockZ() - hole.getZ()) > HINT_RADIUS) continue;
+				if (level.getBlockState(hole).is(ModContent.GUARDIAN_SEAL)) {
+					player.sendOverlayMessage(Component.translatableWithFallback("antcraft.hint.guarded", "A guardian blocks the way — press the button to fight"));
+				}
 			}
 		}
 	}

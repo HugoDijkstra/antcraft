@@ -100,7 +100,18 @@ public enum GuardianId {
 				mob.addEffect(new MobEffectInstance(MobEffects.RESISTANCE, MobEffectInstance.INFINITE_DURATION, 0));
 			}
 			case HOGLIN_WARLORD -> mob.addEffect(new MobEffectInstance(MobEffects.STRENGTH, MobEffectInstance.INFINITE_DURATION, 0));
-			case MOLTEN_SOVEREIGN -> mob.addEffect(new MobEffectInstance(MobEffects.RESISTANCE, MobEffectInstance.INFINITE_DURATION, 0));
+			case MOLTEN_SOVEREIGN -> {
+				// a size-4 magma cube; setSize resets the health attribute, so put the guardian's back
+				if (mob instanceof net.minecraft.world.entity.monster.cubemob.Slime cube) {
+					cube.setSize(4, false);
+					var maxHealth = mob.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.MAX_HEALTH);
+					if (maxHealth != null) maxHealth.setBaseValue(this.health(layoutId));
+					var scale = mob.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.SCALE);
+					if (scale != null) scale.setBaseValue(this.scale);
+					mob.setHealth(mob.getMaxHealth());
+				}
+				mob.addEffect(new MobEffectInstance(MobEffects.RESISTANCE, MobEffectInstance.INFINITE_DURATION, 0));
+			}
 			case BRUTE_WARLORD -> {
 				mob.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.NETHERITE_AXE));
 				mob.setDropChance(EquipmentSlot.MAINHAND, 0.0F);

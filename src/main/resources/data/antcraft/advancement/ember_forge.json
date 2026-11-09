@@ -1,0 +1,27 @@
+{
+  "parent": "antcraft:guardian_bone_colossus",
+  "display": {
+    "icon": {
+      "id": "minecraft:netherite_ingot"
+    },
+    "title": {
+      "translate": "advancements.antcraft.ember_forge.title",
+      "fallback": "The Ember Forge"
+    },
+    "description": {
+      "translate": "advancements.antcraft.ember_forge.description",
+      "fallback": "Reach the Ember Forge at the bottom of the Nether"
+    },
+    "frame": "goal"
+  },
+  "criteria": {
+    "reached": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "reached"
+    ]
+  ]
+}

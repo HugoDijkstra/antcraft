@@ -1,0 +1,27 @@
+{
+  "parent": "antcraft:warped_sanctuary",
+  "display": {
+    "icon": {
+      "id": "minecraft:magma_cream"
+    },
+    "title": {
+      "translate": "advancements.antcraft.guardian_molten_sovereign.title",
+      "fallback": "Cooled Off"
+    },
+    "description": {
+      "translate": "advancements.antcraft.guardian_molten_sovereign.description",
+      "fallback": "Defeat the Molten Sovereign in the Basalt Rift"
+    },
+    "frame": "challenge"
+  },
+  "criteria": {
+    "defeated": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "defeated"
+    ]
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "parent": "antcraft:root",
+  "display": {
+    "icon": {
+      "id": "minecraft:weeping_vines"
+    },
+    "title": {
+      "translate": "advancements.antcraft.nether_depths.title",
+      "fallback": "Below the Nether"
+    },
+    "description": {
+      "translate": "advancements.antcraft.nether_depths.description",
+      "fallback": "Climb down through the Nether's floor into its depths"
+    },
+    "frame": "task"
+  },
+  "criteria": {
+    "reached": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "reached"
+    ]
+  ]
+}

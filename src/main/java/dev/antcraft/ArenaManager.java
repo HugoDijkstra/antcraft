@@ -51,6 +51,8 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.saveddata.SavedData;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.world.level.saveddata.SavedDataType;
 import net.minecraft.world.phys.AABB;
 import org.jspecify.annotations.Nullable;
@@ -88,24 +90,24 @@ public final class ArenaManager {
 	// ------------------------------------------------------------------ geometry
 
 	/** z of the two walls (may lie outside the strip, then that side is closed by the strip's end wall). */
-	public static int wallZ(StripLayout layout, long seed, int floor, StripBounds bounds, int side) {
+	public static int wallZ(ArenaLayout layout, long seed, int floor, StripBounds bounds, int side) {
 		return layout.holeZ(seed, floor, bounds) + side * WALL_OFFSET;
 	}
 
-	public static boolean isDoorway(StripLayout layout, StripBounds bounds, int floor, int x, int y) {
+	public static boolean isDoorway(ArenaLayout layout, StripBounds bounds, int floor, int x, int y) {
 		int floorTop = layout.floorTop(floor);
 		return Math.abs(x - bounds.centerX()) <= DOOR_HALF_WIDTH && y > floorTop && y <= floorTop + DOOR_HEIGHT;
 	}
 
 	/** The room's inside, from the floor up to the hall ceiling. */
-	public static AABB roomBox(StripLayout layout, long seed, int floor, StripBounds bounds) {
+	public static AABB roomBox(ArenaLayout layout, long seed, int floor, StripBounds bounds) {
 		int hz = layout.holeZ(seed, floor, bounds);
 		int floorTop = layout.floorTop(floor);
 		int minZ = Math.max(bounds.minZ(), hz - WALL_OFFSET + 1), maxZ = Math.min(bounds.maxZ(), hz + WALL_OFFSET - 1);
-		return new AABB(bounds.minX(), floorTop + 1, minZ, bounds.maxX() + 1, floorTop + 1 + layout.hallHeight + WALL_EXTRA_HEIGHT, maxZ + 1);
+		return new AABB(bounds.minX(), floorTop + 1, minZ, bounds.maxX() + 1, floorTop + 1 + layout.hallHeight() + WALL_EXTRA_HEIGHT, maxZ + 1);
 	}
 
-	private static BlockPos holePos(StripLayout layout, long seed, int floor, StripBounds bounds) {
+	private static BlockPos holePos(ArenaLayout layout, long seed, int floor, StripBounds bounds) {
 		return new BlockPos(layout.holeX(seed, floor, bounds), layout.floorTop(floor), layout.holeZ(seed, floor, bounds));
 	}
 
@@ -113,19 +115,19 @@ public final class ArenaManager {
 	 * The start button: on a pedestal 3 blocks from the hole along z (towards the strip's middle
 	 * if the hole is near an end), clear of the hole's lanterns.
 	 */
-	static BlockPos buttonPos(StripLayout layout, long seed, int floor, StripBounds bounds) {
+	static BlockPos buttonPos(ArenaLayout layout, long seed, int floor, StripBounds bounds) {
 		int hx = layout.holeX(seed, floor, bounds), hz = layout.holeZ(seed, floor, bounds);
 		int z = hz + 3 <= bounds.maxZ() - 1 ? hz + 3 : hz - 3;
 		return new BlockPos(hx, layout.floorTop(floor) + 2, z);
 	}
 
 	/** The teleporter pad: 3 blocks from the hole across the strip (towards its middle), on the floor. */
-	static BlockPos teleporterPos(StripLayout layout, long seed, int floor, StripBounds bounds) {
+	static BlockPos teleporterPos(ArenaLayout layout, long seed, int floor, StripBounds bounds) {
 		int hx = layout.holeX(seed, floor, bounds), hz = layout.holeZ(seed, floor, bounds);
 		return new BlockPos(hx < bounds.centerX() ? hx + 3 : hx - 3, layout.floorTop(floor) + 1, hz);
 	}
 
-	private static List<BlockPos> gatePositions(StripLayout layout, long seed, int floor, StripBounds bounds) {
+	private static List<BlockPos> gatePositions(ArenaLayout layout, long seed, int floor, StripBounds bounds) {
 		List<BlockPos> list = new ArrayList<>();
 		int floorTop = layout.floorTop(floor);
 		for (int side = -1; side <= 1; side += 2) {
@@ -140,18 +142,18 @@ public final class ArenaManager {
 
 	// ------------------------------------------------------------------ guardians
 
-	private static Component guardianName(StripLayout layout, int floor) {
+	private static Component guardianName(ArenaLayout layout, int floor) {
 		GuardianId g = layout.guardian(floor);
 		return g == null ? Component.translatableWithFallback("antcraft.guardian." + floor, "Guardian") : Component.translatableWithFallback(g.langKey, g.englishName);
 	}
 
-	private static @Nullable Mob spawnGuardian(ServerLevel level, StripLayout layout, int floor, BlockPos hole) {
+	private static @Nullable Mob spawnGuardian(ServerLevel level, ArenaLayout layout, int floor, BlockPos hole) {
 		GuardianId g = layout.guardian(floor);
 		if (g == null) return null;
 		Mob mob = g.entityType().create(level, EntitySpawnReason.EVENT);
 		if (mob == null) return null;
 		mob.snapTo(hole.getX() + 0.5, hole.getY() + 1, hole.getZ() + 0.5, level.getRandom().nextFloat() * 360.0F, 0.0F);
-		setBase(mob, Attributes.MAX_HEALTH, g.health(layout.id));
+		setBase(mob, Attributes.MAX_HEALTH, g.health(layout.arenaLayoutId()));
 		if (g.scale != 1.0) setBase(mob, Attributes.SCALE, g.scale);
 		setBase(mob, Attributes.FOLLOW_RANGE, 40.0);
 		setBase(mob, Attributes.KNOCKBACK_RESISTANCE, g.knockbackResistance);
@@ -160,7 +162,7 @@ public final class ArenaManager {
 		mob.setCustomNameVisible(true);
 		mob.setPersistenceRequired();
 		mob.addTag(GUARDIAN_TAG);
-		g.outfit(mob, layout.id);
+		g.outfit(mob, layout.arenaLayoutId());
 		level.addFreshEntity(mob);
 		return mob;
 	}
@@ -172,9 +174,11 @@ public final class ArenaManager {
 
 	// ------------------------------------------------------------------ state
 
-	private record Arena(int floor, int state, Optional<UUID> guardian) {
+	/** One boss room's state. {@code dimension}: the strip overworld for every room saved before the tall Nether existed. */
+	private record Arena(ResourceKey<Level> dimension, int floor, int state, Optional<UUID> guardian) {
 		static final Codec<Arena> CODEC = RecordCodecBuilder.create(
 			i -> i.group(
+					ResourceKey.codec(Registries.DIMENSION).optionalFieldOf("dimension", Level.OVERWORLD).forGetter(Arena::dimension),
 					Codec.INT.fieldOf("floor").forGetter(Arena::floor),
 					Codec.INT.fieldOf("state").forGetter(Arena::state),
 					UUIDUtil.CODEC.optionalFieldOf("guardian").forGetter(Arena::guardian)
@@ -183,6 +187,8 @@ public final class ArenaManager {
 		);
 	}
 
+	private record RoomKey(ResourceKey<Level> dimension, int floor) {}
+
 	/** Per-world arena states, in the overworld's data storage ({@code data/antcraft_arenas.dat}). */
 	public static final class Data extends SavedData {
 		static final Codec<Data> CODEC = Arena.CODEC.listOf().xmap(Data::new, data -> List.copyOf(data.arenas.values())).fieldOf("arenas").codec();
@@ -190,41 +196,57 @@ public final class ArenaManager {
 			Identifier.fromNamespaceAndPath(AntCraft.MOD_ID, "arenas"), Data::new, CODEC, DataFixTypes.SAVED_DATA_COMMAND_STORAGE
 		);
 
-		private final Map<Integer, Arena> arenas = new HashMap<>();
+		private final Map<RoomKey, Arena> arenas = new java.util.LinkedHashMap<>();
+		/** Set by {@link #data} before each use: the dimension the plain floor numbers refer to. */
+		private ResourceKey<Level> dimension = Level.OVERWORLD;
 
 		Data() {}
 
 		Data(List<Arena> list) {
-			for (Arena arena : list) this.arenas.put(arena.floor(), arena);
+			for (Arena arena : list) this.arenas.put(new RoomKey(arena.dimension(), arena.floor()), arena);
 		}
 
 		Arena get(int floor) {
-			return this.arenas.getOrDefault(floor, new Arena(floor, IDLE, Optional.empty()));
+			return this.arenas.getOrDefault(new RoomKey(this.dimension, floor), new Arena(this.dimension, floor, IDLE, Optional.empty()));
 		}
 
 		void set(int floor, int state, @Nullable UUID guardian) {
-			this.arenas.put(floor, new Arena(floor, state, Optional.ofNullable(guardian)));
+			this.arenas.put(new RoomKey(this.dimension, floor), new Arena(this.dimension, floor, state, Optional.ofNullable(guardian)));
 			this.setDirty();
 		}
 	}
 
-	private static Data data(ServerLevel overworld) {
-		return overworld.getDataStorage().computeIfAbsent(Data.TYPE);
+	/** The arena states (kept in the overworld's data storage), seen from a level's dimension. */
+	private static Data data(ServerLevel level) {
+		Data data = level.getServer().overworld().getDataStorage().computeIfAbsent(Data.TYPE);
+		data.dimension = level.dimension();
+		return data;
 	}
 
 	/** {@link #IDLE}, {@link #FIGHTING} or {@link #CLEARED} (for {@link SelfCheck}). */
-	static int state(ServerLevel overworld, int floor) {
-		return data(overworld).get(floor).state();
+	static int state(ServerLevel level, int floor) {
+		return data(level).get(floor).state();
 	}
 
 	/** Boss bars of running fights (not saved; recreated after a restart). */
-	private static final Map<Integer, ServerBossEvent> BARS = new HashMap<>();
+	private static final Map<RoomKey, ServerBossEvent> BARS = new HashMap<>();
+
+	/**
+	 * The layout whose boss rooms a level has: the strip overworld's, or the tall Nether's (layout
+	 * 3); null for every other level.
+	 */
+	public static @Nullable ArenaLayout arenaLayout(ServerLevel level) {
+		if (level.dimension() == Level.OVERWORLD) return Strip.layout(level);
+		if (level.getChunkSource().getGenerator() instanceof NetherStripChunkGenerator nether && nether.netherLayout().tall()) return nether.netherLayout();
+		return null;
+	}
 
 	// ------------------------------------------------------------------ ticking
 
 	public static void register() {
 		ServerTickEvents.END_SERVER_TICK.register(ArenaManager::tick);
 		ServerLivingEntityEvents.AFTER_DEATH.register(ArenaManager::onDeath);
+		ServerLivingEntityEvents.MOB_CONVERSION.register(ArenaManager::onConversion);
 		UseBlockCallback.EVENT.register(ArenaManager::onUseBlock);
 		ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
 			BARS.values().forEach(ServerBossEvent::removeAllPlayers);
@@ -233,9 +255,15 @@ public final class ArenaManager {
 	}
 
 	private static void tick(MinecraftServer server) {
-		ServerLevel overworld = server.overworld();
+		tick(server, server.overworld());
+		ServerLevel nether = server.getLevel(Level.NETHER);
+		if (nether != null) tick(server, nether);
+	}
+
+	/** One level's boss rooms ({@code overworld}: the strip overworld or the tall Nether). */
+	private static void tick(MinecraftServer server, ServerLevel overworld) {
 		StripBounds bounds = Strip.bounds(overworld);
-		StripLayout layout = Strip.layout(overworld);
+		ArenaLayout layout = arenaLayout(overworld);
 		if (bounds == null || layout == null) return;
 		boolean full = server.getTickCount() % 10 == 0;
 		long seed = overworld.getSeed();
@@ -261,7 +289,7 @@ public final class ArenaManager {
 		return list;
 	}
 
-	private static void tickIdle(ServerLevel level, StripLayout layout, StripBounds bounds, long seed, int floor) {
+	private static void tickIdle(ServerLevel level, ArenaLayout layout, StripBounds bounds, long seed, int floor) {
 		AABB room = roomBox(layout, seed, floor, bounds);
 		if (playersIn(level, room.inflate(4, 2, 12), false).isEmpty()) return;
 		// gates left closed (a fight that was reset while the room was unloaded): open them
@@ -283,7 +311,7 @@ public final class ArenaManager {
 	}
 
 	/** Cleared rooms (also ones cleared before teleporters existed) get a lit teleporter when a player comes near. */
-	private static void tickCleared(ServerLevel level, StripLayout layout, StripBounds bounds, long seed, int floor) {
+	private static void tickCleared(ServerLevel level, ArenaLayout layout, StripBounds bounds, long seed, int floor) {
 		if (playersIn(level, roomBox(layout, seed, floor, bounds).inflate(4, 2, 12), false).isEmpty()) return;
 		placeTeleporter(level, layout, seed, floor, bounds, true);
 		decorate(level, layout, seed, floor, bounds);
@@ -292,10 +320,10 @@ public final class ArenaManager {
 	// ------------------------------------------------------------------ decoration
 
 	/** The chiseled block in a boss-room wall that marks the room as decorated (so it happens once). */
-	private static BlockPos decorationMarker(StripLayout layout, long seed, int floor, StripBounds bounds) {
+	private static BlockPos decorationMarker(ArenaLayout layout, long seed, int floor, StripBounds bounds) {
 		int z = wallZ(layout, seed, floor, bounds, -1);
 		if (z < bounds.minZ()) z = wallZ(layout, seed, floor, bounds, 1);
-		return new BlockPos(bounds.minX(), layout.floorTop(floor) + layout.hallHeight, z);
+		return new BlockPos(bounds.minX(), layout.floorTop(floor) + layout.hallHeight(), z);
 	}
 
 	/**
@@ -303,12 +331,12 @@ public final class ArenaManager {
 	 * banners on the walls, cobwebs, a few floor accents). Placed once, only into air, and never
 	 * around the hole (seal, lanterns, button, teleporter); also added to rooms generated before.
 	 */
-	private static void decorate(ServerLevel level, StripLayout layout, long seed, int floor, StripBounds bounds) {
+	private static void decorate(ServerLevel level, ArenaLayout layout, long seed, int floor, StripBounds bounds) {
 		GuardianId guardian = layout.guardian(floor);
 		if (guardian == null) return;
 		BlockPos marker = decorationMarker(layout, seed, floor, bounds);
 		if (!level.isLoaded(marker) || !level.getBlockState(marker).is(Blocks.POLISHED_BLACKSTONE_BRICKS)) return; // done, or no room
-		int floorTop = layout.floorTop(floor), ceilingY = floorTop + layout.hallHeight; // last air row
+		int floorTop = layout.floorTop(floor), ceilingY = floorTop + layout.hallHeight(); // last air row
 		int hx = layout.holeX(seed, floor, bounds), hz = layout.holeZ(seed, floor, bounds);
 		int zLo = Math.max(bounds.minZ(), hz - WALL_OFFSET + 1), zHi = Math.min(bounds.maxZ(), hz + WALL_OFFSET - 1);
 		// every block of the room must be loaded, or the decoration would be cut off
@@ -411,7 +439,7 @@ public final class ArenaManager {
 		if (level.getBlockState(pos).isAir()) level.setBlockAndUpdate(pos, state);
 	}
 
-	private static void placeTeleporter(ServerLevel level, StripLayout layout, long seed, int floor, StripBounds bounds, boolean lit) {
+	private static void placeTeleporter(ServerLevel level, ArenaLayout layout, long seed, int floor, StripBounds bounds, boolean lit) {
 		BlockPos pos = teleporterPos(layout, seed, floor, bounds);
 		if (!level.isLoaded(pos)) return;
 		BlockState state = level.getBlockState(pos);
@@ -431,15 +459,15 @@ public final class ArenaManager {
 	 */
 	static void teleportUp(ServerLevel level, ServerPlayer player, BlockPos from) {
 		StripBounds bounds = Strip.bounds(level);
-		StripLayout layout = Strip.layout(level);
-		if (bounds == null || layout == null || level != level.getServer().overworld()) return;
+		ArenaLayout layout = arenaLayout(level);
+		if (bounds == null || layout == null) return;
 		long seed = level.getSeed();
 		int[] floors = layout.guardianFloors();
 		for (int i = 0; i < floors.length; i++) {
 			if (!from.equals(teleporterPos(layout, seed, floors[i], bounds))) continue;
 			BlockPos target;
 			Component where;
-			boolean down = layout.id >= 2 && player.isShiftKeyDown();
+			boolean down = layout.arenaLayoutId() >= 2 && player.isShiftKeyDown();
 			if (down) {
 				int deepest = -1;
 				for (int j = floors.length - 1; j > i; j--) {
@@ -456,6 +484,10 @@ public final class ArenaManager {
 				placeTeleporter(level, layout, seed, deepest, bounds, true);
 				target = pad.above();
 				where = guardianName(layout, deepest);
+			} else if (i == 0 && layout instanceof NetherLayout nether && level.getChunkSource().getGenerator() instanceof NetherStripChunkGenerator gen) {
+				// the tall Nether's first boss room: up to the Key Shrine
+				target = KeyShrine.chestPos(bounds, gen.layout()).south(2).below();
+				where = Component.translatableWithFallback("antcraft.teleporter.key_shrine", "the Key Shrine");
 			} else if (i == 0) {
 				BlockPos spawn = level.getRespawnData().pos();
 				int y = level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, spawn.getX(), spawn.getZ());
@@ -479,7 +511,7 @@ public final class ArenaManager {
 	}
 
 	/** Pedestal + button (also added to boss rooms generated before the button existed). */
-	private static void placeButton(ServerLevel level, StripLayout layout, long seed, int floor, StripBounds bounds) {
+	private static void placeButton(ServerLevel level, ArenaLayout layout, long seed, int floor, StripBounds bounds) {
 		BlockPos button = buttonPos(layout, seed, floor, bounds);
 		BlockPos pedestal = button.below();
 		if (!level.isLoaded(button) || level.getBlockState(button).is(BlockTags.BUTTONS)) return;
@@ -491,11 +523,11 @@ public final class ArenaManager {
 
 	/** A player pressed a button: if it is an idle boss room's start button, the fight begins. */
 	private static InteractionResult onUseBlock(Player player, Level world, InteractionHand hand, BlockHitResult hit) {
-		if (!(world instanceof ServerLevel level) || level != level.getServer().overworld() || player.isSpectator()) return InteractionResult.PASS;
+		if (!(world instanceof ServerLevel level) || player.isSpectator()) return InteractionResult.PASS;
 		BlockPos pos = hit.getBlockPos();
 		if (!level.getBlockState(pos).is(BlockTags.BUTTONS)) return InteractionResult.PASS;
 		StripBounds bounds = Strip.bounds(level);
-		StripLayout layout = Strip.layout(level);
+		ArenaLayout layout = arenaLayout(level);
 		if (bounds == null || layout == null) return InteractionResult.PASS;
 		long seed = level.getSeed();
 		for (int floor : layout.guardianFloors()) {
@@ -510,7 +542,7 @@ public final class ArenaManager {
 		return InteractionResult.PASS; // the button still clicks
 	}
 
-	private static void startFight(ServerLevel level, StripLayout layout, StripBounds bounds, long seed, int floor, BlockPos hole, AABB room, List<ServerPlayer> inside) {
+	private static void startFight(ServerLevel level, ArenaLayout layout, StripBounds bounds, long seed, int floor, BlockPos hole, AABB room, List<ServerPlayer> inside) {
 		// a guardian left over from an earlier attempt (its chunk was unloaded during the reset)
 		for (Entity old : level.getEntitiesOfClass(Mob.class, room.inflate(2), mob -> mob.entityTags().contains(GUARDIAN_TAG))) old.discard();
 		Mob guardian = spawnGuardian(level, layout, floor, hole);
@@ -524,7 +556,7 @@ public final class ArenaManager {
 		AntCraft.LOGGER.info("AntCraft: guardian fight on floor {} started", floor);
 	}
 
-	private static void tickFight(ServerLevel level, StripLayout layout, StripBounds bounds, long seed, Arena arena) {
+	private static void tickFight(ServerLevel level, ArenaLayout layout, StripBounds bounds, long seed, Arena arena) {
 		int floor = arena.floor();
 		AABB room = roomBox(layout, seed, floor, bounds);
 		List<ServerPlayer> inside = playersIn(level, room, false);
@@ -533,7 +565,7 @@ public final class ArenaManager {
 			// wipe: everybody died or left
 			if (guardian != null) guardian.discard();
 			openGates(level, layout, seed, floor, bounds);
-			removeBar(floor);
+			removeBar(level, floor);
 			data(level).set(floor, IDLE, null);
 			AntCraft.LOGGER.info("AntCraft: guardian fight on floor {} reset", floor);
 			return;
@@ -544,14 +576,14 @@ public final class ArenaManager {
 			} else {
 				// gone without dying (e.g. removed by a command): reset, the next tick starts over
 				openGates(level, layout, seed, floor, bounds);
-				removeBar(floor);
+				removeBar(level, floor);
 				data(level).set(floor, IDLE, null);
 			}
 			return;
 		}
 		closeGates(level, layout, seed, floor, bounds);
-		ServerBossEvent bar = BARS.computeIfAbsent(floor, f -> {
-			ServerBossEvent event = new ServerBossEvent(UUID.randomUUID(), guardianName(layout, f), BossEvent.BossBarColor.RED, BossEvent.BossBarOverlay.NOTCHED_10);
+		ServerBossEvent bar = BARS.computeIfAbsent(new RoomKey(level.dimension(), floor), key -> {
+			ServerBossEvent event = new ServerBossEvent(UUID.randomUUID(), guardianName(layout, key.floor()), BossEvent.BossBarColor.RED, BossEvent.BossBarOverlay.NOTCHED_10);
 			event.setDarkenScreen(true);
 			return event;
 		});
@@ -563,23 +595,37 @@ public final class ArenaManager {
 	}
 
 	private static void updateBar(ServerLevel level, Arena arena) {
-		ServerBossEvent bar = BARS.get(arena.floor());
+		ServerBossEvent bar = BARS.get(new RoomKey(level.dimension(), arena.floor()));
 		if (bar == null || arena.guardian().isEmpty()) return;
 		if (level.getEntity(arena.guardian().get()) instanceof LivingEntity guardian) {
 			bar.setProgress(Math.clamp(guardian.getHealth() / guardian.getMaxHealth(), 0.0F, 1.0F));
 		}
 	}
 
-	private static void removeBar(int floor) {
-		ServerBossEvent bar = BARS.remove(floor);
+	private static void removeBar(ServerLevel level, int floor) {
+		ServerBossEvent bar = BARS.remove(new RoomKey(level.dimension(), floor));
 		if (bar != null) bar.removeAllPlayers();
+	}
+
+	/**
+	 * A guardian that splits on death (the Molten Sovereign) hands its tags, name, effects and
+	 * persistence to the cubes it splits into ({@code ConversionType.convertCommon}). The children
+	 * are ordinary magma cubes: untagged, unnamed, without the guardian's effects, and they may
+	 * despawn. Fabric fires this before the child is added to the level.
+	 */
+	private static void onConversion(net.minecraft.world.entity.Mob from, net.minecraft.world.entity.Mob to, net.minecraft.world.entity.ConversionParams params) {
+		if (params.type() != net.minecraft.world.entity.ConversionType.SPLIT_ON_DEATH || !from.entityTags().contains(GUARDIAN_TAG)) return;
+		to.removeTag(GUARDIAN_TAG);
+		to.setCustomName(null);
+		to.setCustomNameVisible(false);
+		to.removeAllEffects();
+		((dev.antcraft.mixin.MobAccessor) to).antcraft$setPersistenceRequired(false);
 	}
 
 	private static void onDeath(LivingEntity entity, DamageSource source) {
 		if (!(entity.level() instanceof ServerLevel level) || !entity.entityTags().contains(GUARDIAN_TAG)) return;
-		if (level != level.getServer().overworld()) return;
 		StripBounds bounds = Strip.bounds(level);
-		StripLayout layout = Strip.layout(level);
+		ArenaLayout layout = arenaLayout(level);
 		if (bounds == null || layout == null) return;
 		Data data = data(level);
 		for (int floor : layout.guardianFloors()) {
@@ -599,16 +645,16 @@ public final class ArenaManager {
 	}
 
 	/** The advancement for defeating the guardian of a floor. */
-	private static String advancementFor(StripLayout layout, int floor) {
+	private static String advancementFor(ArenaLayout layout, int floor) {
 		GuardianId g = layout.guardian(floor);
 		return g != null ? g.advancementId : "guardian_" + floor;
 	}
 
-	private static void win(ServerLevel level, StripLayout layout, StripBounds bounds, long seed, int floor) {
+	private static void win(ServerLevel level, ArenaLayout layout, StripBounds bounds, long seed, int floor) {
 		BlockPos hole = holePos(layout, seed, floor, bounds);
 		openGates(level, layout, seed, floor, bounds);
 		if (level.getBlockState(hole).is(ModContent.GUARDIAN_SEAL)) SealBlock.open(level, hole);
-		removeBar(floor);
+		removeBar(level, floor);
 		data(level).set(floor, CLEARED, null);
 		placeTeleporter(level, layout, seed, floor, bounds, true);
 		level.playSound(null, hole, SoundEvents.UI_TOAST_CHALLENGE_COMPLETE, SoundSource.PLAYERS, 1.0F, 1.0F);
@@ -619,7 +665,7 @@ public final class ArenaManager {
 		AntCraft.LOGGER.info("AntCraft: guardian of floor {} defeated", floor);
 	}
 
-	private static void closeGates(ServerLevel level, StripLayout layout, long seed, int floor, StripBounds bounds) {
+	private static void closeGates(ServerLevel level, ArenaLayout layout, long seed, int floor, StripBounds bounds) {
 		BlockState gate = ModContent.ARENA_GATE.defaultBlockState();
 		for (BlockPos pos : gatePositions(layout, seed, floor, bounds)) {
 			if (!level.isLoaded(pos)) continue;
@@ -631,7 +677,7 @@ public final class ArenaManager {
 		}
 	}
 
-	private static void openGates(ServerLevel level, StripLayout layout, long seed, int floor, StripBounds bounds) {
+	private static void openGates(ServerLevel level, ArenaLayout layout, long seed, int floor, StripBounds bounds) {
 		for (BlockPos pos : gatePositions(layout, seed, floor, bounds)) {
 			if (level.isLoaded(pos) && level.getBlockState(pos).is(ModContent.ARENA_GATE)) level.setBlockAndUpdate(pos, Blocks.AIR.defaultBlockState());
 		}

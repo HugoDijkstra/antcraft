@@ -65,6 +65,48 @@ final class StructureAudit {
 	}
 
 	/**
+	 * {@code /antcraft audit spawns}: for the tall Nether, samples the strip (every 8 z on the centre
+	 * line, five heights per layer, in loaded chunks) and logs per layer how often each natural
+	 * MONSTER list ({@code getMobsAt}, structure overrides included) comes back.
+	 */
+	static int spawns(CommandContext<CommandSourceStack> context) {
+		CommandSourceStack source = context.getSource();
+		ServerLevel level = source.getServer().getLevel(net.minecraft.world.level.Level.NETHER);
+		if (level == null || !(level.getChunkSource().getGenerator() instanceof NetherStripChunkGenerator generator) || !generator.netherLayout().tall()) {
+			source.sendFailure(Component.literal("no tall strip Nether in this world"));
+			return 0;
+		}
+		StripBounds bounds = Strip.bounds(level);
+		NetherLayout layout = generator.netherLayout();
+		var registry = level.registryAccess().lookupOrThrow(Registries.ENTITY_TYPE);
+		int lines = 0;
+		for (int layer = 0; layer <= layout.deepLayers; layer++) {
+			int bottom = layer == 0 ? layout.floorBase(0) + 46 : layout.layerBottom(layer), top = layer == 0 ? layout.floorBase(0) + 110 : layout.layerTop(layer);
+			int[] ys = layer == 0 ? new int[] {bottom, (bottom + top) / 2, top} : new int[] {bottom + 2, layout.lavaTop(layer) + 4, bottom + 50, (bottom + top) / 2, top - 6};
+			Map<String, Integer> counts = new TreeMap<>();
+			for (int z = bounds.minZ(); z <= bounds.maxZ(); z += 8) {
+				if (level.getChunkSource().getChunkNow(bounds.centerX() >> 4, z >> 4) == null) continue;
+				for (int y : ys) {
+					net.minecraft.core.BlockPos pos = new net.minecraft.core.BlockPos(bounds.centerX(), y, z);
+					var list = generator.getMobsAt(level, level.structureManager(), net.minecraft.world.entity.MobCategory.MONSTER, pos);
+					StringBuilder key = new StringBuilder("[");
+					for (var weighted : list.unwrap()) {
+						if (key.length() > 1) key.append(' ');
+						key.append(registry.getKey(weighted.value().type()).getPath()).append(':').append(weighted.weight());
+					}
+					counts.merge(key.append(']').toString(), 1, Integer::sum);
+				}
+			}
+			String line = "audit spawns " + (layer == 0 ? "band" : "N" + layer) + " " + counts;
+			AntCraft.LOGGER.info(line);
+			lines++;
+		}
+		int n = lines;
+		source.sendSuccess(() -> Component.literal("AntCraft audit: " + n + " spawn lines logged"), false);
+		return n;
+	}
+
+	/**
 	 * {@code /antcraft audit vault <count> [width length]} (spec 3.5.6 tuning): grows {@code count}
 	 * vault tries (seeds mix(level seed, 9500 + i), as best-of-N uses them, then beyond) for a strip
 	 * of the given size (default: this world's) without placing anything, and logs per try the

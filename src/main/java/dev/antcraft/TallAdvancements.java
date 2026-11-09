@@ -24,6 +24,11 @@ public final class TallAdvancements {
 		"guardian_canyon_conjurer", "guardian_brood_mother", "guardian_gale_lord", "guardian_ember_lord", "ember_key", "opened_ember_seal"
 	);
 
+	/** The tall Nether's advancements (spec v2 4.4): only in a world whose Nether is layout 3. */
+	static final List<String> TALL_NETHER_ONLY = List.of(
+		"nether_depths", "guardian_hoglin_warlord", "warped_sanctuary", "guardian_molten_sovereign", "guardian_brute_warlord", "guardian_bone_colossus", "ember_forge"
+	);
+
 	public static void register() {
 		ServerLifecycleEvents.SERVER_STARTED.register(TallAdvancements::prune);
 		ServerLifecycleEvents.END_DATA_PACK_RELOAD.register((server, resources, success) -> {
@@ -39,12 +44,20 @@ public final class TallAdvancements {
 		return layout != null && layout.id >= 2;
 	}
 
-	/** Removes the tall-only advancements from the tree unless the overworld is tall; true if any was removed. */
+	static boolean isTallNether(MinecraftServer server) {
+		var nether = server.getLevel(net.minecraft.world.level.Level.NETHER);
+		return nether != null && nether.getChunkSource().getGenerator() instanceof NetherStripChunkGenerator gen && gen.netherLayout().tall();
+	}
+
+	/** Removes the tall-only advancements from the tree unless the overworld (Nether) is tall; true if any was removed. */
 	private static boolean prune(MinecraftServer server) {
-		if (isTall(server)) return false;
+		List<String> hidden = new java.util.ArrayList<>();
+		if (!isTall(server)) hidden.addAll(TALL_ONLY);
+		if (!isTallNether(server)) hidden.addAll(TALL_NETHER_ONLY);
+		if (hidden.isEmpty()) return false;
 		var tree = server.getAdvancements().tree();
 		Set<Identifier> ids = new HashSet<>();
-		for (String path : TALL_ONLY) {
+		for (String path : hidden) {
 			Identifier id = Identifier.fromNamespaceAndPath(AntCraft.MOD_ID, path);
 			if (tree.get(id) != null) ids.add(id);
 		}

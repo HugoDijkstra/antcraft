@@ -1,0 +1,27 @@
+{
+  "parent": "antcraft:nether_depths",
+  "display": {
+    "icon": {
+      "id": "minecraft:crimson_fungus"
+    },
+    "title": {
+      "translate": "advancements.antcraft.guardian_hoglin_warlord.title",
+      "fallback": "Tusks Down"
+    },
+    "description": {
+      "translate": "advancements.antcraft.guardian_hoglin_warlord.description",
+      "fallback": "Defeat the Hoglin Warlord in the Nether's second depth"
+    },
+    "frame": "challenge"
+  },
+  "criteria": {
+    "defeated": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "defeated"
+    ]
+  ]
+}

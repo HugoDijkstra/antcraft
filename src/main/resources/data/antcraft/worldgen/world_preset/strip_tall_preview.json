@@ -33,15 +33,19 @@
       }
     },
     "minecraft:the_nether": {
-      "type": "antcraft:strip_nether",
+      "type": "antcraft:strip_nether_tall",
       "generator": {
         "type": "antcraft:nether_strip",
         "size_from_config": true,
-        "layout": 2,
+        "layout": 3,
         "base": {
           "biome_source": {
-            "type": "minecraft:multi_noise",
-            "preset": "minecraft:nether"
+            "type": "antcraft:nether_strip",
+            "base": {
+              "type": "minecraft:multi_noise",
+              "preset": "minecraft:nether"
+            },
+            "layout": 3
           },
           "settings": "minecraft:nether"
         }

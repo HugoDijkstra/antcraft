@@ -36,7 +36,9 @@ public abstract class NaturalSpawnerMixin {
 		RandomSource random, int min, int max, Operation<Integer> original,
 		@Local(argsOnly = true) Level level, @Local(ordinal = 0) int x, @Local(ordinal = 1) int z
 	) {
-		if (!AntCraftConfig.get().spawnMobsNearPlayers || !(level instanceof ServerLevel server) || server.dimension() != Level.OVERWORLD || !AntCraft.isStripLevel(server)) {
+		if (!AntCraftConfig.get().spawnMobsNearPlayers || !(level instanceof ServerLevel server) || !AntCraft.isStripLevel(server)
+			|| (server.dimension() != Level.OVERWORLD && server.getHeight() <= 256)) {
+			// the strip overworld, and every tall strip dimension (the tall Nether is 4064 blocks high)
 			return original.call(random, min, max);
 		}
 		ServerPlayer nearest = null;

@@ -42,7 +42,53 @@ public final class KeyShrine {
 	}
 
 	public static BlockPos chestPos(StripBounds bounds, int layout) {
-		return new BlockPos(minX(bounds) + 4, FLOOR_Y + 2, minZ(bounds, layout) + 4);
+		return new BlockPos(minX(bounds) + 4, floorY(layout) + 2, minZ(bounds, layout) + 4);
+	}
+
+	/** Shrine floor: y 70, moved with the vanilla Nether in the tall layout (1974). */
+	static int floorY(int layout) {
+		return FLOOR_Y + NetherLayout.byId(layout).frameOffset;
+	}
+
+	/** Tall layout: centre of the stair shaft down to the NF0 tunnel, just past the north corridor's end. */
+	static BlockPos shaftCentre(StripBounds bounds, int layout) {
+		int midX = minX(bounds) + SIZE / 2 - 1;
+		return new BlockPos(midX, floorY(layout), minZ(bounds, layout) - CORRIDOR - 3);
+	}
+
+	/**
+	 * The stair shaft from the shrine's north corridor down to the NF0 tunnel hall (tall layout): a
+	 * 5x5 nether-brick tower with spiral stairs, open into the corridor at the top and into the
+	 * tunnel at the bottom. Rebuilt like the shrine (whatever the fortress or features put there).
+	 */
+	private static void stairShaft(WorldGenLevel level, StripBounds bounds, int layout, int regionMinX, int regionMaxX, int regionMinZ, int regionMaxZ) {
+		NetherLayout nether = NetherLayout.byId(layout);
+		BlockPos c = shaftCentre(bounds, layout);
+		int hall = nether.hallBottom(0), floorY = floorY(layout);
+		// the top step is the corridor floor, at ring index 5 (dz = +1, next to the doorway); the steps repeat every 8 blocks
+		int bottom = hall - 8 + Math.floorMod(floorY - hall - 5, 8);
+		DeepNetherTerrain.Tower tower = new DeepNetherTerrain.Tower(c.getX(), c.getZ(), bottom, floorY + 1, Integer.MIN_VALUE, false);
+		BlockPos.MutableBlockPos at = new BlockPos.MutableBlockPos();
+		BlockState bricks = Blocks.NETHER_BRICKS.defaultBlockState();
+		for (int dx = -2; dx <= 2; dx++) {
+			for (int dz = -2; dz <= 2; dz++) {
+				int x = c.getX() + dx, z = c.getZ() + dz;
+				if (x < regionMinX || x > regionMaxX || z < regionMinZ || z > regionMaxZ || !bounds.inside(x, z)) continue;
+				for (int y = hall; y <= floorY + 4; y++) {
+					BlockState want;
+					if (y <= floorY) {
+						want = DeepNetherTerrain.towerBlock(tower, dx, y, dz, bricks);
+						boolean perimeter = Math.abs(dx) == 2 || Math.abs(dz) == 2;
+						if (perimeter) want = y >= hall + nether.hallHeight ? bricks : null; // open into the tunnel at the bottom
+					} else {
+						boolean shell = Math.abs(dx) == 2 || Math.abs(dz) == 2 || y == floorY + 4;
+						want = shell ? bricks : DeepTerrain.AIR;
+						if (dz == 2 && Math.abs(dx) <= 1 && y <= floorY + 3) want = DeepTerrain.AIR; // the doorway into the corridor
+					}
+					if (want != null && level.getBlockState(at.set(x, y, z)) != want) level.setBlock(at, want, Block.UPDATE_CLIENTS);
+				}
+			}
+		}
 	}
 
 	/**
@@ -64,9 +110,11 @@ public final class KeyShrine {
 		final int regionMinZ = (center.z() - 1) << 4, regionMaxZ = ((center.z() + 1) << 4) + 15;
 		int footMinX = Math.max(minX, regionMinX), footMaxX = Math.min(maxX, regionMaxX);
 		int footMinZ = Math.max(minZ - CORRIDOR, regionMinZ), footMaxZ = Math.min(maxZ + CORRIDOR, regionMaxZ);
+		if (layout >= 3) stairShaft(level, bounds, layout, regionMinX, regionMaxX, regionMinZ, regionMaxZ);
 		if (footMinX > footMaxX || footMinZ > footMaxZ) return;
 
 		long seed = level.getSeed();
+		final int floorY = floorY(layout), ceilY = floorY + (CEIL_Y - FLOOR_Y);
 		BlockState bricks = Blocks.NETHER_BRICKS.defaultBlockState();
 		BlockState red = Blocks.RED_NETHER_BRICKS.defaultBlockState();
 		BlockState fence = Blocks.NETHER_BRICK_FENCE.defaultBlockState();
@@ -76,24 +124,24 @@ public final class KeyShrine {
 			for (int z = footMinZ; z <= footMaxZ; z++) {
 				boolean room = z >= minZ && z <= maxZ;
 				if (!room && (x < midX - 1 || x > midX + 2)) continue; // corridors are 4 wide
-				for (int y = FLOOR_Y; y <= CEIL_Y; y++) {
+				for (int y = floorY; y <= ceilY; y++) {
 					BlockState state;
 					if (room) {
-						boolean shell = x == minX || x == maxX || z == minZ || z == maxZ || y == FLOOR_Y || y == CEIL_Y;
-						boolean doorZ = (z == minZ || z == maxZ) && (x == midX || x == midX + 1) && y > FLOOR_Y && y <= FLOOR_Y + 3;
-						boolean doorX = (x == minX || x == maxX) && (z == midZ || z == midZ + 1) && y > FLOOR_Y && y <= FLOOR_Y + 3;
+						boolean shell = x == minX || x == maxX || z == minZ || z == maxZ || y == floorY || y == ceilY;
+						boolean doorZ = (z == minZ || z == maxZ) && (x == midX || x == midX + 1) && y > floorY && y <= floorY + 3;
+						boolean doorX = (x == minX || x == maxX) && (z == midZ || z == midZ + 1) && y > floorY && y <= floorY + 3;
 						if (!shell || doorZ || doorX) {
 							state = DeepTerrain.AIR;
-						} else if (y == CEIL_Y && (x + z) % 3 == 0) {
+						} else if (y == ceilY && (x + z) % 3 == 0) {
 							state = Blocks.SHROOMLIGHT.defaultBlockState();
 						} else {
 							state = brick(seed, x, y, z, bricks, red);
 						}
 					} else {
 						// corridor along the strip from a z door, carved through whatever is there
-						if (y > FLOOR_Y + 3) continue;
+						if (y > floorY + 3) continue;
 						boolean side = x == midX - 1 || x == midX + 2;
-						state = y == FLOOR_Y ? bricks : side && y == FLOOR_Y + 1 ? fence : DeepTerrain.AIR;
+						state = y == floorY ? bricks : side && y == floorY + 1 ? fence : DeepTerrain.AIR;
 					}
 					put(level, at.set(x, y, z), state);
 				}
@@ -114,13 +162,13 @@ public final class KeyShrine {
 
 		// guards and light
 		RandomSource random = new XoroshiroRandomSource(seed ^ 0x5EA1L);
-		for (BlockPos spawner : new BlockPos[] {new BlockPos(minX + 1, FLOOR_Y + 1, minZ + 1), new BlockPos(maxX - 1, FLOOR_Y + 1, maxZ - 1)}) {
+		for (BlockPos spawner : new BlockPos[] {new BlockPos(minX + 1, floorY + 1, minZ + 1), new BlockPos(maxX - 1, floorY + 1, maxZ - 1)}) {
 			if (!inRegion(spawner, regionMinX, regionMaxX, regionMinZ, regionMaxZ)) continue;
 			if (put(level, spawner, Blocks.SPAWNER.defaultBlockState()) && level.getBlockEntity(spawner) instanceof SpawnerBlockEntity be) {
 				be.setEntityId(EntityTypes.BLAZE, random);
 			}
 		}
-		for (BlockPos lantern : new BlockPos[] {new BlockPos(maxX - 1, FLOOR_Y + 1, minZ + 1), new BlockPos(minX + 1, FLOOR_Y + 1, maxZ - 1)}) {
+		for (BlockPos lantern : new BlockPos[] {new BlockPos(maxX - 1, floorY + 1, minZ + 1), new BlockPos(minX + 1, floorY + 1, maxZ - 1)}) {
 			if (inRegion(lantern, regionMinX, regionMaxX, regionMinZ, regionMaxZ)) put(level, lantern, Blocks.SOUL_LANTERN.defaultBlockState());
 		}
 	}
