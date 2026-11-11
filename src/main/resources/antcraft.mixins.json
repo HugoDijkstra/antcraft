@@ -39,6 +39,8 @@
 		"SlimeMixin",
 		"StructureStartAccessorMixin",
 		"StructureTemplateAccessor",
+		"TeleporterInputMixin",
+		"TeleporterJumpMixin",
 		"TemplateStructurePieceAccessor",
 		"VerticalAnchorAbsoluteMixin",
 		"WorldDimensionsMixin",

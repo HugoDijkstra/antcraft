@@ -191,7 +191,13 @@ public final class ArenaManager {
 
 	/** Per-world arena states, in the overworld's data storage ({@code data/antcraft_arenas.dat}). */
 	public static final class Data extends SavedData {
-		static final Codec<Data> CODEC = Arena.CODEC.listOf().xmap(Data::new, data -> List.copyOf(data.arenas.values())).fieldOf("arenas").codec();
+		static final Codec<Data> CODEC = RecordCodecBuilder.create(
+			i -> i.group(
+					Arena.CODEC.listOf().fieldOf("arenas").forGetter(data -> List.copyOf(data.arenas.values())),
+					BlockPos.CODEC.optionalFieldOf("surface_teleporter").forGetter(data -> Optional.ofNullable(data.surfaceTeleporter))
+				)
+				.apply(i, Data::new)
+		);
 		static final SavedDataType<Data> TYPE = new SavedDataType<>(
 			Identifier.fromNamespaceAndPath(AntCraft.MOD_ID, "arenas"), Data::new, CODEC, DataFixTypes.SAVED_DATA_COMMAND_STORAGE
 		);
@@ -200,10 +206,14 @@ public final class ArenaManager {
 		/** Set by {@link #data} before each use: the dimension the plain floor numbers refer to. */
 		private ResourceKey<Level> dimension = Level.OVERWORLD;
 
+		/** The overworld surface teleporter, once placed (after the first overworld guardian is defeated). */
+		private @Nullable BlockPos surfaceTeleporter;
+
 		Data() {}
 
-		Data(List<Arena> list) {
+		Data(List<Arena> list, Optional<BlockPos> surfaceTeleporter) {
 			for (Arena arena : list) this.arenas.put(new RoomKey(arena.dimension(), arena.floor()), arena);
+			this.surfaceTeleporter = surfaceTeleporter.orElse(null);
 		}
 
 		Arena get(int floor) {
@@ -251,10 +261,17 @@ public final class ArenaManager {
 		ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
 			BARS.values().forEach(ServerBossEvent::removeAllPlayers);
 			BARS.clear();
+			PENDING.clear();
+			LAST_TRAVEL.clear();
 		});
 	}
 
 	private static void tick(MinecraftServer server) {
+		if (!PENDING.isEmpty()) {
+			List<Runnable> pending = List.copyOf(PENDING);
+			PENDING.clear();
+			pending.forEach(Runnable::run);
+		}
 		tick(server, server.overworld());
 		ServerLevel nether = server.getLevel(Level.NETHER);
 		if (nether != null) tick(server, nether);
@@ -267,6 +284,7 @@ public final class ArenaManager {
 		if (bounds == null || layout == null) return;
 		boolean full = server.getTickCount() % 10 == 0;
 		long seed = overworld.getSeed();
+		if (full && overworld.dimension() == Level.OVERWORLD) tickSurfaceTeleporter(overworld, layout, bounds);
 		for (int floor : layout.guardianFloors()) {
 			Arena arena = data(overworld).get(floor);
 			if (arena.state() == FIGHTING) {
@@ -308,6 +326,44 @@ public final class ArenaManager {
 		placeButton(level, layout, seed, floor, bounds);
 		placeTeleporter(level, layout, seed, floor, bounds, false);
 		decorate(level, layout, seed, floor, bounds);
+	}
+
+	/** The deepest cleared boss room of a level, or -1. */
+	private static int deepestCleared(ServerLevel level, ArenaLayout layout) {
+		int[] floors = layout.guardianFloors();
+		for (int j = floors.length - 1; j >= 0; j--) if (data(level).get(floors[j]).state() == CLEARED) return floors[j];
+		return -1;
+	}
+
+	/**
+	 * Once an overworld guardian is defeated, a lit teleporter appears on the surface next to the
+	 * world spawn (placed when that spot is loaded, then remembered). It takes players down to the
+	 * deepest defeated guardian's room.
+	 */
+	private static void tickSurfaceTeleporter(ServerLevel level, ArenaLayout layout, StripBounds bounds) {
+		if (deepestCleared(level, layout) < 0) return;
+		Data data = data(level);
+		BlockPos pos = data.surfaceTeleporter;
+		if (pos == null) {
+			BlockPos spawn = level.getRespawnData().pos();
+			int x = spawn.getX() + 2 <= bounds.maxX() ? spawn.getX() + 2 : spawn.getX() - 2;
+			int z = Math.clamp(spawn.getZ(), bounds.minZ(), bounds.maxZ());
+			if (!level.isLoaded(new BlockPos(x, spawn.getY(), z))) return;
+			int y = level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
+			pos = new BlockPos(x, y, z);
+			if (!level.getBlockState(pos).canBeReplaced() || !level.getBlockState(pos.above()).canBeReplaced()) return;
+			data.surfaceTeleporter = pos;
+			data.setDirty();
+			AntCraft.LOGGER.info("AntCraft: surface teleporter placed at {}", pos.toShortString());
+		}
+		if (!level.isLoaded(pos)) return;
+		BlockState state = level.getBlockState(pos);
+		if (state.is(ModContent.TELEPORTER)) {
+			if (!state.getValue(TeleporterBlock.LIT)) level.setBlockAndUpdate(pos, state.setValue(TeleporterBlock.LIT, true));
+		} else if (state.canBeReplaced()) {
+			level.setBlockAndUpdate(pos, ModContent.TELEPORTER.defaultBlockState().setValue(TeleporterBlock.LIT, true));
+			level.playSound(null, pos, SoundEvents.BEACON_ACTIVATE, SoundSource.BLOCKS, 1.0F, 1.2F);
+		}
 	}
 
 	/** Cleared rooms (also ones cleared before teleporters existed) get a lit teleporter when a player comes near. */
@@ -452,62 +508,117 @@ public final class ArenaManager {
 		if (lit) level.playSound(null, pos, SoundEvents.BEACON_ACTIVATE, SoundSource.BLOCKS, 1.0F, 1.2F);
 	}
 
+	/** How a teleporter is used: up one room, down one defeated room, or down to the deepest defeated room. */
+	enum Travel { UP, DOWN, DEEPEST }
+
+	/** Teleports queued by jumps and crouches, run at the end of the server tick (not inside movement handling). */
+	private static final List<Runnable> PENDING = new ArrayList<>();
+	/** Server tick of each player's last teleport, so arriving on a pad does not bounce straight on. */
+	private static final Map<UUID, Integer> LAST_TRAVEL = new HashMap<>();
+
 	/**
-	 * Teleports a player standing at a lit teleporter to the boss room on the floor above (onto its
-	 * teleporter), or from the first boss room to the surface spawn. Tall layouts: sneaking sends
-	 * the player down instead, to the deepest boss room that is cleared.
+	 * Right-click on a lit teleporter: up (sneaking: down to the deepest defeated guardian). The
+	 * surface teleporter always goes down to the deepest defeated guardian.
 	 */
 	static void teleportUp(ServerLevel level, ServerPlayer player, BlockPos from) {
+		boolean surface = level.dimension() == Level.OVERWORLD && from.equals(data(level).surfaceTeleporter);
+		travel(level, player, from, surface || player.isShiftKeyDown() ? Travel.DEEPEST : Travel.UP);
+	}
+
+	/** A player jumped: standing on a teleporter, they go up. */
+	public static void onJump(ServerPlayer player) {
+		padTravel(player, Travel.UP);
+	}
+
+	/** A player started crouching: standing on a teleporter, they go down one defeated room. */
+	public static void onCrouch(ServerPlayer player) {
+		padTravel(player, Travel.DOWN);
+	}
+
+	private static void padTravel(ServerPlayer player, Travel travel) {
+		if (!(player.level() instanceof ServerLevel level) || player.isSpectator()) return;
+		BlockPos pos = BlockPos.containing(player.getX(), player.getY() - 0.2, player.getZ());
+		BlockState state = level.getBlockState(pos);
+		if (!state.is(ModContent.TELEPORTER)) return;
+		int now = level.getServer().getTickCount();
+		Integer last = LAST_TRAVEL.get(player.getUUID());
+		if (last != null && now >= last && now - last < 10) return;
+		if (!state.getValue(TeleporterBlock.LIT)) {
+			player.sendOverlayMessage(Component.translatableWithFallback(
+				"block.antcraft.teleporter.inactive", "The teleporter wakes up when this room's guardian is defeated"
+			));
+			return;
+		}
+		PENDING.add(() -> {
+			if (player.isRemoved() || player.level() != level) return;
+			travel(level, player, pos, travel);
+		});
+	}
+
+	/**
+	 * Teleports a player from a lit teleporter: up to the boss room on the floor above (onto its
+	 * teleporter; from the first boss room to the surface teleporter, or the spawn if there is none),
+	 * or down to the next / the deepest boss room whose guardian is defeated.
+	 */
+	private static void travel(ServerLevel level, ServerPlayer player, BlockPos from, Travel travel) {
 		StripBounds bounds = Strip.bounds(level);
 		ArenaLayout layout = arenaLayout(level);
 		if (bounds == null || layout == null) return;
 		long seed = level.getSeed();
 		int[] floors = layout.guardianFloors();
-		for (int i = 0; i < floors.length; i++) {
-			if (!from.equals(teleporterPos(layout, seed, floors[i], bounds))) continue;
-			BlockPos target;
-			Component where;
-			boolean down = layout.arenaLayoutId() >= 2 && player.isShiftKeyDown();
-			if (down) {
-				int deepest = -1;
-				for (int j = floors.length - 1; j > i; j--) {
-					if (data(level).get(floors[j]).state() == CLEARED) {
-						deepest = floors[j];
-						break;
-					}
-				}
-				if (deepest < 0) {
-					player.sendOverlayMessage(Component.translatableWithFallback("antcraft.teleporter.no_deeper", "No deeper guardian is defeated yet"));
-					return;
-				}
-				BlockPos pad = teleporterPos(layout, seed, deepest, bounds);
-				placeTeleporter(level, layout, seed, deepest, bounds, true);
-				target = pad.above();
-				where = guardianName(layout, deepest);
-			} else if (i == 0 && layout instanceof NetherLayout nether && level.getChunkSource().getGenerator() instanceof NetherStripChunkGenerator gen) {
-				// the tall Nether's first boss room: up to the Key Shrine
-				target = KeyShrine.chestPos(bounds, gen.layout()).south(2).below();
-				where = Component.translatableWithFallback("antcraft.teleporter.key_shrine", "the Key Shrine");
-			} else if (i == 0) {
-				BlockPos spawn = level.getRespawnData().pos();
-				int y = level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, spawn.getX(), spawn.getZ());
-				target = new BlockPos(spawn.getX(), Math.max(y, spawn.getY()), spawn.getZ());
-				where = Component.translatableWithFallback("antcraft.teleporter.surface", "the surface");
-			} else {
-				int above = floors[i - 1];
-				BlockPos pad = teleporterPos(layout, seed, above, bounds);
-				placeTeleporter(level, layout, seed, above, bounds, data(level).get(above).state() == CLEARED);
-				target = pad.above();
-				where = guardianName(layout, above);
-			}
-			level.playSound(null, from, SoundEvents.ENDERMAN_TELEPORT, SoundSource.PLAYERS, 1.0F, 1.0F);
-			player.teleportTo(level, target.getX() + 0.5, target.getY(), target.getZ() + 0.5, java.util.Set.of(), player.getYRot(), player.getXRot(), true);
-			level.playSound(null, target, SoundEvents.ENDERMAN_TELEPORT, SoundSource.PLAYERS, 1.0F, 1.0F);
-			player.sendOverlayMessage(down
-				? Component.translatableWithFallback("antcraft.teleporter.arrived_down", "Teleported down to %s", where)
-				: Component.translatableWithFallback("antcraft.teleporter.arrived", "Teleported up to %s", where));
-			return;
+		BlockPos surfacePad = level.dimension() == Level.OVERWORLD ? data(level).surfaceTeleporter : null;
+		int index = -2; // the pad's room in floors; -1 = the surface teleporter
+		if (from.equals(surfacePad)) {
+			index = -1;
+		} else {
+			for (int i = 0; i < floors.length; i++) if (from.equals(teleporterPos(layout, seed, floors[i], bounds))) index = i;
+			if (index == -2) return;
 		}
+		BlockPos target;
+		Component where;
+		boolean down = travel != Travel.UP;
+		if (down) {
+			int dest = -1;
+			if (travel == Travel.DEEPEST) {
+				for (int j = floors.length - 1; j > index && dest < 0; j--) if (data(level).get(floors[j]).state() == CLEARED) dest = floors[j];
+			} else {
+				for (int j = index + 1; j < floors.length && dest < 0; j++) if (data(level).get(floors[j]).state() == CLEARED) dest = floors[j];
+			}
+			if (dest < 0) {
+				player.sendOverlayMessage(Component.translatableWithFallback("antcraft.teleporter.no_deeper", "No deeper guardian is defeated yet"));
+				return;
+			}
+			placeTeleporter(level, layout, seed, dest, bounds, true);
+			target = teleporterPos(layout, seed, dest, bounds).above();
+			where = guardianName(layout, dest);
+		} else if (index == -1) {
+			player.sendOverlayMessage(Component.translatableWithFallback("antcraft.teleporter.top", "This is the top. Crouch to go down."));
+			return;
+		} else if (index == 0 && layout instanceof NetherLayout && level.getChunkSource().getGenerator() instanceof NetherStripChunkGenerator gen) {
+			// the tall Nether's first boss room: up to the Key Shrine
+			target = KeyShrine.chestPos(bounds, gen.layout()).south(2).below();
+			where = Component.translatableWithFallback("antcraft.teleporter.key_shrine", "the Key Shrine");
+		} else if (index == 0 && surfacePad != null) {
+			target = surfacePad.above();
+			where = Component.translatableWithFallback("antcraft.teleporter.surface", "the surface");
+		} else if (index == 0) {
+			BlockPos spawn = level.getRespawnData().pos();
+			int y = level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, spawn.getX(), spawn.getZ());
+			target = new BlockPos(spawn.getX(), Math.max(y, spawn.getY()), spawn.getZ());
+			where = Component.translatableWithFallback("antcraft.teleporter.surface", "the surface");
+		} else {
+			int above = floors[index - 1];
+			placeTeleporter(level, layout, seed, above, bounds, data(level).get(above).state() == CLEARED);
+			target = teleporterPos(layout, seed, above, bounds).above();
+			where = guardianName(layout, above);
+		}
+		LAST_TRAVEL.put(player.getUUID(), level.getServer().getTickCount());
+		level.playSound(null, from, SoundEvents.ENDERMAN_TELEPORT, SoundSource.PLAYERS, 1.0F, 1.0F);
+		player.teleportTo(level, target.getX() + 0.5, target.getY(), target.getZ() + 0.5, java.util.Set.of(), player.getYRot(), player.getXRot(), true);
+		level.playSound(null, target, SoundEvents.ENDERMAN_TELEPORT, SoundSource.PLAYERS, 1.0F, 1.0F);
+		player.sendOverlayMessage(down
+			? Component.translatableWithFallback("antcraft.teleporter.arrived_down", "Teleported down to %s", where)
+			: Component.translatableWithFallback("antcraft.teleporter.arrived", "Teleported up to %s", where));
 	}
 
 	/** Pedestal + button (also added to boss rooms generated before the button existed). */
@@ -661,6 +772,8 @@ public final class ArenaManager {
 		for (ServerPlayer player : playersIn(level, roomBox(layout, seed, floor, bounds), false)) {
 			LayerTracker.award(player, advancementFor(layout, floor), "defeated");
 			player.sendOverlayMessage(Component.translatableWithFallback("antcraft.arena.won", "%s is defeated. The way down is open.", guardianName(layout, floor)));
+			if (level.dimension() == Level.OVERWORLD) player.sendSystemMessage(Component.translatableWithFallback(
+				"antcraft.arena.surface_teleporter", "A teleporter at the surface spawn now leads down to the deepest defeated guardian."));
 		}
 		AntCraft.LOGGER.info("AntCraft: guardian of floor {} defeated", floor);
 	}

@@ -15,9 +15,10 @@ import net.minecraft.world.level.block.state.properties.BooleanProperty;
 import net.minecraft.world.phys.BlockHitResult;
 
 /**
- * The teleporter pad in a boss room ({@link ArenaManager}). It is dark until the room's guardian is
- * defeated; then right-clicking it takes the player to the boss room on the floor above (from the
- * first boss room: to the surface spawn).
+ * The teleporter pad in a boss room, or on the surface next to the spawn ({@link ArenaManager}). It
+ * is dark until the room's guardian is defeated. Standing on a lit pad, jumping goes up one boss room
+ * (from the first: to the surface) and crouching goes down to the next defeated one; right-clicking
+ * goes up too.
  */
 public class TeleporterBlock extends Block {
 	public static final BooleanProperty LIT = BlockStateProperties.LIT;

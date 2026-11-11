@@ -21,7 +21,7 @@ A Fabric mod for Minecraft 26.3 that turns the world into an ant farm: a strip o
 - **Underground forests** in every layer, with ponds, plants, animals, climbable vines on the walls and enough light for crops and saplings. Crops grow faster down there.
 - **Villages** in most layers. The deeper the village, the better its villagers trade.
 - **Gates**:
-  - **Boss rooms** on floors 0, 2 and 6. Press the button to fight the guardian; when it dies, the way down opens and a teleporter back up appears.
+  - **Boss rooms** on floors 0, 2 and 6. Press the button to fight the guardian; when it dies, the way down opens and the room's teleporter lights up. Stand on a teleporter and jump to go up one boss room, or crouch to go down to the next defeated one. After the first guardian, a teleporter also appears on the surface next to the world spawn.
   - **Floor 4** is sealed. A **Nether Key** from the Nether opens it.
   - **Floor 7** is sealed. An **Ancient Key** from the ancient city opens it.
 - **Harder rock, harder mobs**: stone takes longer to mine the deeper you go. More monsters spawn deeper down, and zombies there are better equipped.
